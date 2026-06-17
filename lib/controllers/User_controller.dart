@@ -1,5 +1,6 @@
 import 'package:admin/models/User.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:excel/excel.dart';
@@ -15,11 +16,15 @@ class UserController extends GetxController {
   RxList<User> users = <User>[].obs;
   RxList<User> filteredUsers = <User>[].obs;
   RxInt userCount = 0.obs;
-  RxInt tvUserCount = 0.obs; // Holds the count of TV users
+  RxInt tvUserCount = 0.obs;
   RxInt rowsPerPage = 10.obs;
   RxInt last24HoursUsersCount = 0.obs;
   RxInt yesterdayUsersCount = 0.obs;
   RxInt last7DaysUsersCount = 0.obs;
+  RxString searchQuery = ''.obs;
+  RxString activeFilterLabel = 'All Users'.obs;
+  // base list for the current active filter (before search)
+  List<User> _activeFilterBase = [];
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
@@ -47,9 +52,10 @@ class UserController extends GetxController {
         }
       }
 
-      users.value = fetchedUsers;
-      filteredUsers.value = users;
-      // This function now also calculates the TV user count
+      // Exclude soft-deleted users from the active list
+      users.value = fetchedUsers.where((u) => !u.isDeleted).toList();
+      _activeFilterBase = List.from(users);
+      _applySearch();
       calculateUserStats();
     } catch (e) {
       print("Error fetching users: $e");
@@ -93,24 +99,59 @@ class UserController extends GetxController {
     }).length;
   }
 
-  // This filtering method is already correct and uses the same logic as the count.
+  void _applySearch() {
+    final q = searchQuery.value.trim().toLowerCase();
+    if (q.isEmpty) {
+      filteredUsers.value = List.from(_activeFilterBase);
+    } else {
+      filteredUsers.value = _activeFilterBase.where((u) {
+        return (u.name?.toLowerCase().contains(q) ?? false) ||
+            (u.email?.toLowerCase().contains(q) ?? false) ||
+            (u.phone?.contains(q) ?? false);
+      }).toList();
+    }
+  }
+
+  void searchUsers(String query) {
+    searchQuery.value = query;
+    _applySearch();
+  }
+
   void filterTvUsers() {
-    filteredUsers.value = users.where((user) {
-      return user.devices != null && user.devices!.containsKey('AndroidTV');
-    }).toList();
+    _activeFilterBase = users
+        .where((u) => u.devices != null && u.devices!.containsKey('AndroidTV'))
+        .toList();
+    activeFilterLabel.value = 'TV Users';
+    _applySearch();
   }
 
   void filterLast24Hours() {
-    DateTime last24Hours = DateTime.now().subtract(const Duration(hours: 24));
-    filteredUsers.value = users
-        .where((user) =>
-            user.registrationDate != null &&
-            user.registrationDate!.isAfter(last24Hours))
+    final last24Hours = DateTime.now().subtract(const Duration(hours: 24));
+    _activeFilterBase = users
+        .where((u) =>
+            u.registrationDate != null &&
+            u.registrationDate!.isAfter(last24Hours))
         .toList();
+    activeFilterLabel.value = 'Last 24 Hours';
+    _applySearch();
+  }
+
+  void filterActiveUsers() {
+    _activeFilterBase = users.where((u) => u.active == true).toList();
+    activeFilterLabel.value = 'Active';
+    _applySearch();
+  }
+
+  void filterInactiveUsers() {
+    _activeFilterBase = users.where((u) => u.active != true).toList();
+    activeFilterLabel.value = 'Inactive';
+    _applySearch();
   }
 
   void clearFilter() {
-    filteredUsers.value = users;
+    _activeFilterBase = List.from(users);
+    activeFilterLabel.value = 'All Users';
+    _applySearch();
   }
 
   void clearInputFields() {
@@ -209,33 +250,74 @@ class UserController extends GetxController {
   }
 
   Future<void> exportToExcel() async {
-    var excel = Excel.createExcel();
-    Sheet sheetObject = excel['Users'];
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    final excel = Excel.createExcel();
+    final Sheet sheet = excel['Users'];
 
-    List<TextCellValue> headers = [
-      TextCellValue('Name'),
-      TextCellValue('Email'),
-      TextCellValue('Phone'),
-      TextCellValue('Registration Date')
-    ];
-    sheetObject.appendRow(headers);
+    sheet.appendRow([
+      'Sr No',
+      'Name',
+      'Email',
+      'Phone',
+      'Registration Date',
+      'Subscription Active',
+      'Subscription Type',
+      'Sub Start Date',
+      'Sub Expiry Date',
+      'Days Until Expiry',
+      'TV User',
+      'Payment Status',
+    ].map((h) => TextCellValue(h)).toList());
 
+    int srNo = 1;
     for (var user in filteredUsers) {
-      sheetObject.appendRow([
+      final daysLeft = user.subscriptionExpiryDate != null
+          ? user.subscriptionExpiryDate!.difference(DateTime.now()).inDays
+          : 0;
+      final isTv =
+          (user.devices != null && user.devices!.containsKey('AndroidTV'))
+              ? 'Yes'
+              : 'No';
+      final subStatus = (user.active == true) ? 'Active' : 'Inactive';
+      String subType = user.subscriptionType ?? 'N/A';
+      if (subType == 'basic_plan_id') subType = 'Basic';
+
+      sheet.appendRow([
+        TextCellValue(srNo.toString()),
         TextCellValue(user.name ?? 'N/A'),
         TextCellValue(user.email ?? 'N/A'),
         TextCellValue(user.phone ?? 'N/A'),
-        TextCellValue(user.registrationDate?.toIso8601String() ?? 'N/A')
+        TextCellValue(user.registrationDate != null
+            ? dateFormat.format(user.registrationDate!)
+            : 'N/A'),
+        TextCellValue(subStatus),
+        TextCellValue(subType),
+        TextCellValue(user.subscriptionStartDate != null
+            ? dateFormat.format(user.subscriptionStartDate!)
+            : 'N/A'),
+        TextCellValue(user.subscriptionExpiryDate != null
+            ? dateFormat.format(user.subscriptionExpiryDate!)
+            : 'N/A'),
+        TextCellValue(daysLeft > 0 ? '$daysLeft days' : 'Expired'),
+        TextCellValue(isTv),
+        TextCellValue(user.purchaseToken?.isNotEmpty == true ? 'Paid' : 'N/A'),
       ]);
+      srNo++;
     }
 
-    var fileBytes = excel.save();
-    var directory = await getApplicationDocumentsDirectory();
-    File(
-      '${directory.path}/users.xlsx',
-    )
-      ..createSync(recursive: true)
-      ..writeAsBytesSync(fileBytes!);
+    final fileName =
+        'Users_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx';
+    final fileBytes = excel.save();
+    if (fileBytes == null) return;
+
+    if (kIsWeb) {
+      excel.save(fileName: fileName);
+    } else {
+      final directory = await getApplicationDocumentsDirectory();
+      File('${directory.path}/$fileName')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(fileBytes);
+    }
   }
 
   Future<void> exportToPdf(List<User> filteredUsers) async {

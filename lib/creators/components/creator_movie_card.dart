@@ -6,6 +6,37 @@ import 'package:admin/constants.dart';
 import 'package:get/get.dart';
 import 'package:admin/creators/screens/creator_movie_detail_screen.dart';
 
+String _formatWatchTime(int secs) {
+  if (secs <= 0) return '0m';
+  if (secs < 60) return '${secs}s';
+  if (secs < 3600) return '${secs ~/ 60}m';
+  final h = secs ~/ 3600;
+  final m = (secs % 3600) ~/ 60;
+  return '${h}h ${m}m';
+}
+
+Widget _statBadge(
+    {required IconData icon,
+    required String label,
+    required Color color}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 11, color: color),
+      const SizedBox(width: 3),
+      Text(label,
+          style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w600)),
+    ]),
+  );
+}
+
 class CreatorMovieCard extends StatelessWidget {
   final Movie movie;
 
@@ -88,18 +119,29 @@ class CreatorMovieCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Release Year & Views
+                // Release Year
+                Text(
+                  movie.yearText,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Views & Watch Time stats
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      movie.yearText,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.white70,
-                      ),
+                    _statBadge(
+                      icon: Icons.visibility_rounded,
+                      label: '${movie.viewsCount}',
+                      color: Colors.blueAccent,
                     ),
-                    // View count removed as requested
+                    const SizedBox(width: 8),
+                    _statBadge(
+                      icon: Icons.access_time_rounded,
+                      label: _formatWatchTime(movie.watchSecondsCount),
+                      color: Colors.amber,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),

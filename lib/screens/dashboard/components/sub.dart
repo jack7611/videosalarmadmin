@@ -7,7 +7,7 @@ class SubscriptionService {
   static const _razorpayKeyId = 'rzp_live_noJNXCxQIlWIgH';
   static const _razorpayKeySecret = '3qPSMuQzCxYZQpAH1czTB8AB';
   static const _iosSharedSecret = 'fde1c8b51a044cd78dbe1bfa073dd77f';
-  static const _androidEndpoint = 'http://165.22.215.103:3066/checkSubscriptionStatus';
+  static const _androidEndpoint = 'https://videosalarm.com/sub/checkSubscriptionStatus';
 
   /// Entry point: Validate all users in Firestore
   Future<void> validateAllUsers() async {

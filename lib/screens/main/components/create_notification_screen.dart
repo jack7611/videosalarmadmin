@@ -33,7 +33,7 @@ class CreateNotificationScreen extends StatelessWidget {
       elevation: 0,
       backgroundColor: const Color(0xFF1A1A1A),
       title: const Text(
-        'Send Notification',
+        'Festival / Event Notification',
         style: TextStyle(
           fontWeight: FontWeight.w700,
           fontSize: 24,
@@ -55,7 +55,7 @@ class CreateNotificationScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Broadcast Message',
+          'Festival / Event Broadcast',
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.w800,
@@ -65,9 +65,9 @@ class CreateNotificationScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Compose and send a push notification to app users.',
+          'Send a custom message to ALL users — Diwali wishes, Holi greetings, app announcements, special offers, etc.',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 14,
             color: Colors.white60,
             fontWeight: FontWeight.w400,
           ),
@@ -132,8 +132,8 @@ class CreateNotificationScreen extends StatelessWidget {
           // Input Fields
           _buildTextField(
             controller: controller.titleController,
-            label: 'Notification Title (e.g., New Video Name)',
-            icon: Icons.title_rounded,
+            label: 'Message Title (e.g., Happy Diwali! 🪔)',
+            icon: Icons.celebration_rounded,
             maxLength: 60,
           ),
           _buildTextField(
@@ -340,22 +340,25 @@ class CreateNotificationScreen extends StatelessWidget {
                 style: TextStyle(color: Colors.white60, fontSize: 16),
               ),
             ),
-            ElevatedButton(
+            Obx(() => ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6366F1),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
+                disabledBackgroundColor: Colors.grey.withOpacity(0.3),
               ),
-              onPressed: () {
-                Navigator.of(context).pop();
-                controller.sendNotification();
-              },
+              onPressed: controller.isLoading.value
+                  ? null
+                  : () {
+                      Navigator.of(context).pop();
+                      controller.sendNotification();
+                    },
               child: const Text(
                 'Confirm & Send',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
-            ),
+            )),
           ],
         );
       },

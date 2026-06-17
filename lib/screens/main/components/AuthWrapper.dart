@@ -15,21 +15,11 @@ class AuthWrapper extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        // If the user is logged in
-        if (snapshot.hasData) {
-          // Persist login state in localStorage
-          if (html.window.localStorage['isLoggedIn'] == null) {
-            html.window.localStorage['isLoggedIn'] = 'true';
-          }
+        // Only show MainScreen if admin explicitly logged in via credentials
+        if (html.window.localStorage['isLoggedIn'] == 'true') {
           return MainScreen();
-        } else {
-          // If the user is not logged in
-          if (html.window.localStorage['isLoggedIn'] == 'true') {
-            return MainScreen();
-          }
-          // Otherwise, return the sign-in page
-          return const AdminSignInPage();
         }
+        return const AdminSignInPage();
       },
     );
   }

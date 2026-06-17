@@ -2,6 +2,7 @@ import 'package:admin/controllers/User_controller.dart';
 import 'package:admin/models/User.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 class UserPage extends StatelessWidget {
   const UserPage({Key? key}) : super(key: key);
@@ -339,8 +340,9 @@ class UserPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Header row ──
           Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
             child: Row(
               children: [
                 Container(
@@ -368,116 +370,240 @@ class UserPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                // MODIFIED: Replaced icon-only PopupMenuButton with a labeled child
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'all') {
-                      userController.clearFilter();
-                    } else if (value == 'last24') {
-                      userController.filterLast24Hours();
-                    } else if (value == 'tv_users') {
-                      userController.filterTvUsers();
-                    }
-                  },
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(
-                      value: 'all',
-                      child: Text('All Users'),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'last24',
-                      child: Text('Last 24 Hours'),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'tv_users',
-                      child: Text('TV Users'),
-                    ),
-                  ],
-                  tooltip: 'Filter Users',
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F0F0F),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.filter_list_rounded, color: Colors.white70),
-                        SizedBox(width: 8),
-                        Text(
-                          'Filter',
-                          style: TextStyle(color: Colors.white70),
+                Obx(() {
+                  final label = userController.activeFilterLabel.value;
+                  final isFiltered = label != 'All Users';
+                  return PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'all') {
+                        userController.clearFilter();
+                      } else if (value == 'last24') {
+                        userController.filterLast24Hours();
+                      } else if (value == 'active') {
+                        userController.filterActiveUsers();
+                      } else if (value == 'inactive') {
+                        userController.filterInactiveUsers();
+                      } else if (value == 'tv_users') {
+                        userController.filterTvUsers();
+                      }
+                    },
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    color: const Color(0xFF1A1A1A),
+                    itemBuilder: (BuildContext context) =>
+                        <PopupMenuEntry<String>>[
+                      _filterMenuItem(
+                        value: 'all',
+                        label: 'All Users',
+                        icon: Icons.people_rounded,
+                        color: Colors.white70,
+                        active: label == 'All Users',
+                      ),
+                      const PopupMenuDivider(height: 1),
+                      _filterMenuItem(
+                        value: 'active',
+                        label: 'Active Users',
+                        icon: Icons.check_circle_rounded,
+                        color: const Color(0xFF10B981),
+                        active: label == 'Active',
+                      ),
+                      _filterMenuItem(
+                        value: 'inactive',
+                        label: 'Inactive Users',
+                        icon: Icons.cancel_rounded,
+                        color: const Color(0xFFEF4444),
+                        active: label == 'Inactive',
+                      ),
+                      const PopupMenuDivider(height: 1),
+                      _filterMenuItem(
+                        value: 'last24',
+                        label: 'Last 24 Hours',
+                        icon: Icons.hourglass_bottom_rounded,
+                        color: const Color(0xFFF59E0B),
+                        active: label == 'Last 24 Hours',
+                      ),
+                      _filterMenuItem(
+                        value: 'tv_users',
+                        label: 'TV Users',
+                        icon: Icons.tv_rounded,
+                        color: const Color(0xFFEC4899),
+                        active: label == 'TV Users',
+                      ),
+                    ],
+                    tooltip: 'Filter Users',
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isFiltered
+                            ? const Color(0xFF6366F1).withOpacity(0.15)
+                            : const Color(0xFF0F0F0F),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isFiltered
+                              ? const Color(0xFF6366F1).withOpacity(0.5)
+                              : Colors.white10,
                         ),
-                      ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.filter_list_rounded,
+                              color: isFiltered
+                                  ? const Color(0xFF6366F1)
+                                  : Colors.white70,
+                              size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            label,
+                            style: TextStyle(
+                              color: isFiltered
+                                  ? const Color(0xFF6366F1)
+                                  : Colors.white70,
+                              fontWeight: isFiltered
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              fontSize: 13,
+                            ),
+                          ),
+                          if (isFiltered) ...[
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: userController.clearFilter,
+                              child: const Icon(Icons.close_rounded,
+                                  size: 14,
+                                  color: Color(0xFF6366F1)),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                }),
                 const SizedBox(width: 16),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F0F0F),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Obx(() => Text(
+                Obx(() => Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F0F0F),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Text(
                         '${userController.filteredUsers.length} users',
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
-                      )),
-                ),
+                      ),
+                    )),
               ],
             ),
           ),
+
+          // ── Search bar ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+            child: Obx(() => TextField(
+                  style: const TextStyle(color: Colors.white),
+                  onChanged: userController.searchUsers,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name, email or phone...',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    prefixIcon: const Icon(Icons.search_rounded,
+                        color: Colors.white38),
+                    suffixIcon: userController.searchQuery.value.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear,
+                                color: Colors.white38, size: 20),
+                            onPressed: () => userController.searchUsers(''),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: const Color(0xFF0F0F0F),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          BorderSide(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                          color: Color(0xFF6366F1), width: 2),
+                    ),
+                  ),
+                )),
+          ),
+
+          // ── Table ──
           SizedBox(
             width: double.infinity,
             child: Theme(
               data: Theme.of(context).copyWith(
-                iconTheme: const IconThemeData(
-                    color: Colors.white), // Makes dropdown arrow white
+                iconTheme: const IconThemeData(color: Colors.white),
                 textTheme: Theme.of(context).textTheme.copyWith(
                       bodySmall: const TextStyle(color: Colors.white),
                     ),
               ),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 24),
-                child: PaginatedDataTable(
-                  key: ValueKey(
-                      '${userController.rowsPerPage.value}_${userController.filteredUsers.hashCode}'),
-                  headingRowColor:
-                      MaterialStateProperty.all(const Color(0xFF0F0F0F)),
-                  horizontalMargin: 0,
-                  columnSpacing: 24,
-                  rowsPerPage: userController.rowsPerPage.value,
-                  availableRowsPerPage: const [5, 10, 20, 50],
-                  onRowsPerPageChanged: (value) {
-                    userController.rowsPerPage.value = value!;
-                  },
-                  columns: [
-                    DataColumn(
-                      label: Expanded(
-                        child: Text('Name', style: _headerTextStyle()),
+              child: Obx(() {
+                final key = ValueKey(
+                    '${userController.rowsPerPage.value}_'
+                    '${userController.filteredUsers.length}_'
+                    '${userController.searchQuery.value}');
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 24),
+                  child: PaginatedDataTable(
+                    key: key,
+                    headingRowColor: MaterialStateProperty.all(
+                        const Color(0xFF0F0F0F)),
+                    horizontalMargin: 0,
+                    columnSpacing: 20,
+                    rowsPerPage: userController.rowsPerPage.value,
+                    availableRowsPerPage: const [5, 10, 20, 50],
+                    onRowsPerPageChanged: (value) {
+                      userController.rowsPerPage.value = value!;
+                    },
+                    columns: [
+                      DataColumn(
+                        label: Expanded(
+                            child: Text('Name',
+                                style: _headerTextStyle())),
                       ),
+                      DataColumn(
+                        label:
+                            Text('Phone', style: _headerTextStyle()),
+                      ),
+                      DataColumn(
+                        label: Text('Registered',
+                            style: _headerTextStyle()),
+                      ),
+                      DataColumn(
+                        label: Text('Subscription',
+                            style: _headerTextStyle()),
+                      ),
+                      DataColumn(
+                        label: Text('Expiry',
+                            style: _headerTextStyle()),
+                      ),
+                      DataColumn(
+                        label: Text('Actions',
+                            style: _headerTextStyle()),
+                      ),
+                    ],
+                    source: _UserDataSource(
+                      userController: userController,
+                      context: context,
                     ),
-                    DataColumn(
-                      label: Text('Phone', style: _headerTextStyle()),
-                    ),
-                    DataColumn(
-                      label: Text('Actions', style: _headerTextStyle()),
-                    ),
-                  ],
-                  source: _UserDataSource(
-                    userController: userController,
-                    context: context,
                   ),
-                ),
-              ),
+                );
+              }),
             ),
           ),
           const SizedBox(height: 24),
@@ -494,6 +620,36 @@ class UserPage extends StatelessWidget {
       letterSpacing: -0.2,
     );
   }
+
+  static PopupMenuItem<String> _filterMenuItem({
+    required String value,
+    required String label,
+    required IconData icon,
+    required Color color,
+    required bool active,
+  }) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: active ? color : Colors.white,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          if (active)
+            Icon(Icons.check_rounded, color: color, size: 16),
+        ],
+      ),
+    );
+  }
 }
 
 class _UserDataSource extends DataTableSource {
@@ -502,134 +658,188 @@ class _UserDataSource extends DataTableSource {
 
   _UserDataSource({required this.userController, required this.context});
 
+  static final _dateFmt = DateFormat('dd MMM yyyy');
+
   @override
   DataRow getRow(int index) {
     if (index >= userController.filteredUsers.length) {
-      return const DataRow(cells: [
-        DataCell(Text('')),
-        DataCell(Text('')),
-        DataCell(Text('')),
-      ]);
+      return DataRow(cells: List.filled(6, const DataCell(Text(''))));
     }
     final user = userController.filteredUsers[index];
-    return DataRow(
-      cells: [
-        DataCell(
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    (user.name?.isNotEmpty == true)
-                        ? user.name![0].toUpperCase()
-                        : 'U',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      user.name ?? 'N/A',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      user.email ?? 'No email',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white.withOpacity(0.5),
-                        fontWeight: FontWeight.w400,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        DataCell(
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F0F0F),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white10),
+
+    final isActive = user.active == true;
+    final hasExpiry = user.subscriptionExpiryDate != null;
+    final daysLeft = hasExpiry
+        ? user.subscriptionExpiryDate!.difference(DateTime.now()).inDays
+        : 0;
+    final isExpired = hasExpiry && daysLeft < 0;
+
+    return DataRow(cells: [
+      // ── Name + Email ──
+      DataCell(Row(children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Center(
             child: Text(
-              user.phone ?? 'N/A',
+              (user.name?.isNotEmpty == true)
+                  ? user.name![0].toUpperCase()
+                  : 'U',
               style: const TextStyle(
-                fontSize: 16,
-                color: Colors.white70,
-                fontWeight: FontWeight.w500,
-              ),
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700),
             ),
           ),
         ),
-        DataCell(
-          Row(
-            mainAxisSize: MainAxisSize.min,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // MODIFIED: Replaced IconButton with TextButton.icon for Edit
-              TextButton.icon(
-                onPressed: () =>
-                    _showEditUserDialog(context, userController, user),
-                icon: const Icon(Icons.edit_rounded,
-                    color: Color(0xFF3B82F6), size: 20),
-                label:
-                    const Text('Edit', style: TextStyle(color: Color(0xFF3B82F6))),
-                style: TextButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6).withOpacity(0.1),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // MODIFIED: Replaced IconButton with TextButton.icon for Delete
-              TextButton.icon(
-                onPressed: () =>
-                    _showDeleteDialog(context, userController, user),
-                icon: const Icon(Icons.delete_rounded,
-                    color: Color(0xFFEF4444), size: 20),
-                label: const Text('Delete',
-                    style: TextStyle(color: Color(0xFFEF4444))),
-                style: TextButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4444).withOpacity(0.1),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                ),
-              ),
+              Text(user.name ?? 'N/A',
+                  style: const TextStyle(
+                      fontSize: 15,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis),
+              Text(user.email ?? 'No email',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.45),
+                      fontWeight: FontWeight.w400),
+                  overflow: TextOverflow.ellipsis),
             ],
           ),
         ),
-      ],
+      ])),
+
+      // ── Phone ──
+      DataCell(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F0F0F),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Text(user.phone ?? 'N/A',
+            style: const TextStyle(
+                fontSize: 13,
+                color: Colors.white70,
+                fontWeight: FontWeight.w500)),
+      )),
+
+      // ── Registration date ──
+      DataCell(Text(
+        user.registrationDate != null
+            ? _dateFmt.format(user.registrationDate!)
+            : 'N/A',
+        style: const TextStyle(fontSize: 13, color: Colors.white60),
+      )),
+
+      // ── Subscription status badge ──
+      DataCell(_buildSubBadge(isActive, isExpired)),
+
+      // ── Expiry ──
+      DataCell(hasExpiry
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(_dateFmt.format(user.subscriptionExpiryDate!),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color:
+                            isExpired ? Colors.red[300] : Colors.white60)),
+                if (!isExpired)
+                  Text('$daysLeft days left',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: daysLeft <= 7
+                              ? Colors.orange[300]
+                              : Colors.white38)),
+              ],
+            )
+          : const Text('N/A',
+              style: TextStyle(fontSize: 13, color: Colors.white38))),
+
+      // ── Actions ──
+      DataCell(Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextButton.icon(
+            onPressed: () =>
+                _showEditUserDialog(context, userController, user),
+            icon: const Icon(Icons.edit_rounded,
+                color: Color(0xFF3B82F6), size: 18),
+            label: const Text('Edit',
+                style: TextStyle(color: Color(0xFF3B82F6))),
+            style: TextButton.styleFrom(
+              backgroundColor:
+                  const Color(0xFF3B82F6).withOpacity(0.1),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 8),
+            ),
+          ),
+          const SizedBox(width: 6),
+          TextButton.icon(
+            onPressed: () =>
+                _showDeleteDialog(context, userController, user),
+            icon: const Icon(Icons.delete_rounded,
+                color: Color(0xFFEF4444), size: 18),
+            label: const Text('Delete',
+                style: TextStyle(color: Color(0xFFEF4444))),
+            style: TextButton.styleFrom(
+              backgroundColor:
+                  const Color(0xFFEF4444).withOpacity(0.1),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 8),
+            ),
+          ),
+        ],
+      )),
+    ]);
+  }
+
+  Widget _buildSubBadge(bool isActive, bool isExpired) {
+    Color bg;
+    Color fg;
+    String label;
+    if (isActive && !isExpired) {
+      bg = const Color(0xFF10B981).withOpacity(0.15);
+      fg = const Color(0xFF10B981);
+      label = 'Active';
+    } else if (isExpired) {
+      bg = const Color(0xFFEF4444).withOpacity(0.15);
+      fg = const Color(0xFFEF4444);
+      label = 'Expired';
+    } else {
+      bg = Colors.white.withOpacity(0.06);
+      fg = Colors.white38;
+      label = 'Inactive';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 12, color: fg, fontWeight: FontWeight.w600)),
     );
   }
 

@@ -9,11 +9,23 @@ class CreatorMovieController extends GetxController {
   var movies = <Movie>[].obs;
   var isLoading = true.obs;
   var error = ''.obs;
+  var ratePerWatchHour = 50.0.obs;
 
   @override
   void onInit() {
     super.onInit();
     fetchCreatorMovies();
+    fetchWatchHourRate();
+  }
+
+  Future<void> fetchWatchHourRate() async {
+    try {
+      final doc = await _firestore.collection('settings').doc('earnings').get();
+      if (doc.exists && doc.data()?['ratePerWatchHour'] != null) {
+        ratePerWatchHour.value =
+            (doc.data()!['ratePerWatchHour'] as num).toDouble();
+      }
+    } catch (_) {}
   }
 
   // Future<void> fetchCreatorMovies() async {

@@ -1,807 +1,434 @@
 import 'package:admin/controllers/User_controller.dart';
 import 'package:admin/controllers/Videos_controller.dart';
 import 'package:admin/controllers/blog_controller.dart';
+import 'package:admin/controllers/creator_controller.dart';
+import 'package:admin/controllers/movie_controller.dart';
 import 'package:admin/responsive.dart';
-import 'package:admin/screens/dashboard/components/funnel.dart';
 import 'package:admin/screens/dashboard/components/recent_files.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 import '../../../constants.dart';
-import 'file_info_card.dart';
+import 'funnel.dart';
 
-// Dark Theme Constants
+// ── Palette ───────────────────────────────────────────────────────────────────
 class DashboardTheme {
-  static const Color backgroundColor = Color(0xFF0F0F23);
-  static const Color surfaceColor = Color(0xFF1A1A2E);
-  static const Color cardColor = Color(0xFF16213E);
-  static const Color accentColor = Color(0xFF00D4FF);
-  static const Color primaryColor = Color(0xFF6C5CE7);
-  static const Color successColor = Color(0xFF00B894);
-  static const Color warningColor = Color(0xFFE17055);
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFB2B7C1);
-  static const Color textMuted = Color(0xFF74788D);
-  static const Color borderColor = Color(0xFF2D3748);
-  
-  static BoxDecoration cardDecoration = BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        cardColor,
-        cardColor.withOpacity(0.8),
-      ],
-    ),
+  static const Color backgroundColor = Color(0xFF0A0A1A);
+  static const Color surfaceColor    = Color(0xFF12122A);
+  static const Color cardColor       = Color(0xFF1A1A35);
+  static const Color accentColor     = Color(0xFF00D4FF);
+  static const Color primaryColor    = Color(0xFF6C5CE7);
+  static const Color successColor    = Color(0xFF00B894);
+  static const Color warningColor    = Color(0xFFE17055);
+  static const Color roseColor       = Color(0xFFFF6B9D);
+  static const Color goldColor       = Color(0xFFFFD93D);
+  static const Color textPrimary     = Color(0xFFFFFFFF);
+  static const Color textSecondary   = Color(0xFFB2B7C1);
+  static const Color textMuted       = Color(0xFF74788D);
+  static const Color borderColor     = Color(0xFF2D3748);
+
+  static BoxDecoration cardDecoration({Color? glowColor}) => BoxDecoration(
+    color: cardColor,
     borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: borderColor.withOpacity(0.3), width: 1),
+    border: Border.all(color: borderColor.withOpacity(0.4), width: 1),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withOpacity(0.3),
-        blurRadius: 20,
-        offset: Offset(0, 8),
-        spreadRadius: 2,
-      ),
-    ],
-  );
-  
-  static BoxDecoration glassDecoration = BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Colors.white.withOpacity(0.1),
-        Colors.white.withOpacity(0.05),
-      ],
-    ),
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.2),
-        blurRadius: 10,
-        offset: Offset(0, 4),
+        color: (glowColor ?? Colors.black).withOpacity(glowColor != null ? 0.18 : 0.35),
+        blurRadius: 24,
+        offset: const Offset(0, 8),
+        spreadRadius: glowColor != null ? 2 : 0,
       ),
     ],
   );
 }
 
+// ── Root widget ───────────────────────────────────────────────────────────────
 class MyFiles extends StatelessWidget {
   const MyFiles({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            DashboardTheme.backgroundColor,
-            DashboardTheme.surfaceColor.withOpacity(0.8),
-          ],
-        ),
-      ),
+      color: DashboardTheme.backgroundColor,
       child: SingleChildScrollView(
-        padding: EdgeInsets.all(defaultPadding),
+        padding: const EdgeInsets.all(defaultPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(context),
-            SizedBox(height: defaultPadding * 2),
-            
+            _DashboardHeader(),
+            const SizedBox(height: defaultPadding * 2),
+            const _StatsGrid(),
+            const SizedBox(height: defaultPadding * 2),
             Responsive(
-              mobile: _buildMobileLayout(),
-              tablet: _buildTabletLayout(), 
-              desktop: _buildDesktopLayout(),
+              mobile: Column(children: [
+                const ConversionFunnelWidget(),
+                const SizedBox(height: defaultPadding * 2),
+                UserJoinGraph(),
+              ]),
+              tablet: Column(children: [
+                const ConversionFunnelWidget(),
+                const SizedBox(height: defaultPadding * 2),
+                UserJoinGraph(),
+              ]),
+              desktop: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(flex: 2, child: const ConversionFunnelWidget()),
+                const SizedBox(width: defaultPadding),
+                Expanded(flex: 3, child: UserJoinGraph()),
+              ]),
             ),
+            const SizedBox(height: defaultPadding * 2),
+            const _QuickActions(),
+            const SizedBox(height: defaultPadding * 2),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildHeader(BuildContext context) {
+// ── Header ────────────────────────────────────────────────────────────────────
+class _DashboardHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final dateStr = DateFormat('EEEE, d MMMM yyyy').format(now);
+    final hour = now.hour;
+    final greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+
     return Container(
-      padding: EdgeInsets.all(defaultPadding * 1.5),
-      decoration: DashboardTheme.glassDecoration,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1A1A4E), Color(0xFF0F0F2D)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: DashboardTheme.primaryColor.withOpacity(0.3), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: DashboardTheme.primaryColor.withOpacity(0.15),
+            blurRadius: 30,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
+          // Logo
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: DashboardTheme.accentColor.withOpacity(0.3),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(6),
+            child: Image.asset('assets/images/logo.png', fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.movie, color: Color(0xFF6C5CE7), size: 36)),
+          ),
+          const SizedBox(width: 18),
+
+          // Title
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$greeting, Admin',
+                    style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: DashboardTheme.textPrimary,
+                        letterSpacing: -0.5)),
+                const SizedBox(height: 4),
+                Text('Videos Alarm — Dashboard Overview',
+                    style: TextStyle(
+                        fontSize: 13, color: DashboardTheme.textSecondary)),
+                const SizedBox(height: 2),
+                Text(dateStr,
+                    style: TextStyle(fontSize: 12, color: DashboardTheme.textMuted)),
+              ],
+            ),
+          ),
+
+          // Live badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [
+                DashboardTheme.successColor,
+                DashboardTheme.successColor.withOpacity(0.75),
+              ]),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: DashboardTheme.successColor.withOpacity(0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: const [
+              Icon(Icons.circle, color: Colors.white, size: 8),
+              SizedBox(width: 6),
+              Text('LIVE',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      letterSpacing: 1.5)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Stats grid ────────────────────────────────────────────────────────────────
+class _StatsGrid extends StatelessWidget {
+  const _StatsGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    final userCtrl    = Get.find<UserController>();
+    final videoCtrl   = Get.find<VideosController>();
+    final blogCtrl    = Get.find<BlogController>();
+    final movieCtrl   = Get.find<MovieController>();
+    final creatorCtrl = Get.find<CreatorController>();
+
+    return Obx(() {
+      final subscribers = userCtrl.users
+          .where((u) => !u.isDeleted && u.active == true && u.subscriptionStartDate != null)
+          .length;
+
+      final stats = [
+        _StatData('Movies',    movieCtrl.movies.length,            Icons.movie_rounded,        DashboardTheme.primaryColor, '/Movies'),
+        _StatData('Videos',    videoCtrl.videos.length,            Icons.play_circle_rounded,  DashboardTheme.accentColor,  '/Videos'),
+        _StatData('Users',     userCtrl.users.length,              Icons.people_rounded,        DashboardTheme.successColor, '/Users'),
+        _StatData('Subscribers', subscribers,                       Icons.star_rounded,         DashboardTheme.goldColor,    '/subscriptions'),
+        _StatData('Creators',  creatorCtrl.creators.length,        Icons.videocam_rounded,     DashboardTheme.roseColor,    '/creators'),
+        _StatData('Blogs',     blogCtrl.blogData.length,           Icons.article_rounded,      DashboardTheme.warningColor, '/Blog'),
+      ];
+
+      return LayoutBuilder(builder: (ctx, constraints) {
+        int cols = constraints.maxWidth < 500 ? 2 : constraints.maxWidth < 900 ? 3 : 6;
+        double aspect = constraints.maxWidth < 500 ? 1.3 : 1.5;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: aspect,
+          ),
+          itemCount: stats.length,
+          itemBuilder: (_, i) => _StatCard(data: stats[i]),
+        );
+      });
+    });
+  }
+}
+
+class _StatData {
+  final String label;
+  final int count;
+  final IconData icon;
+  final Color color;
+  final String route;
+  const _StatData(this.label, this.count, this.icon, this.color, this.route);
+}
+
+class _StatCard extends StatelessWidget {
+  final _StatData data;
+  const _StatCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Get.toNamed(data.route),
+        child: Container(
+          decoration: DashboardTheme.cardDecoration(glowColor: data.color),
+          padding: const EdgeInsets.all(14),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(9),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [DashboardTheme.accentColor, DashboardTheme.primaryColor],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: DashboardTheme.accentColor.withOpacity(0.3),
-                          blurRadius: 15,
-                          offset: Offset(0, 5),
-                        ),
-                      ],
+                      gradient: LinearGradient(colors: [
+                        data.color.withOpacity(0.3),
+                        data.color.withOpacity(0.1),
+                      ]),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.dashboard_rounded, color: Colors.white, size: 24),
+                    child: Icon(data.icon, color: data.color, size: 20),
                   ),
-                  SizedBox(width: 16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Dashboard Overview",
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: DashboardTheme.textPrimary,
-                          letterSpacing: -1,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        "Monitor your platform's key metrics and performance",
-                        style: TextStyle(
-                          color: DashboardTheme.textSecondary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
+                  Icon(Icons.arrow_forward_ios_rounded,
+                      size: 12, color: DashboardTheme.textMuted),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    data.count.toString(),
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: data.color,
+                      letterSpacing: -1,
+                    ),
                   ),
+                  const SizedBox(height: 2),
+                  Text(data.label,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: DashboardTheme.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 ],
               ),
             ],
           ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [DashboardTheme.successColor, DashboardTheme.successColor.withOpacity(0.8)],
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.trending_up, color: Colors.white, size: 16),
-                SizedBox(width: 8),
-                Text(
-                  "Live",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
 
-  Widget _buildMobileLayout() {
-    return Column(
-      children: [
-        _buildStatsCards(),
-        SizedBox(height: defaultPadding * 2),
-        _buildAnalyticsSection(),
-        SizedBox(height: defaultPadding * 2),
-        _buildQuickActions(),
-      ],
-    );
-  }
+// ── Quick actions ─────────────────────────────────────────────────────────────
+class _QuickActions extends StatelessWidget {
+  const _QuickActions();
 
-  Widget _buildTabletLayout() {
-    return Column(
-      children: [
-        _buildStatsCards(),
-        SizedBox(height: defaultPadding * 2),
-        _buildAnalyticsSection(),
-        SizedBox(height: defaultPadding * 2),
-        _buildQuickActions(),
-      ],
-    );
-  }
+  @override
+  Widget build(BuildContext context) {
+    final actions = [
+      _ActionData('Upload Movie',   Icons.add_circle_rounded,   DashboardTheme.primaryColor, '/Movies'),
+      _ActionData('Manage Users',   Icons.manage_accounts,       DashboardTheme.successColor, '/Users'),
+      _ActionData('Advertisements', Icons.campaign_rounded,      DashboardTheme.accentColor,  '/ads'),
+      _ActionData('Invoices',       Icons.receipt_long_rounded,  DashboardTheme.goldColor,    '/invoices'),
+      _ActionData('Creators',       Icons.videocam_rounded,      DashboardTheme.roseColor,    '/creators'),
+      _ActionData('Earnings',       Icons.account_balance_wallet_rounded, DashboardTheme.warningColor, '/earnings_settings'),
+    ];
 
-  Widget _buildDesktopLayout() {
-    return Column(
-      children: [
-        _buildStatsCards(),
-        SizedBox(height: defaultPadding * 2),
-        _buildAnalyticsSection(),
-        SizedBox(height: defaultPadding * 2),
-        _buildQuickActions(),
-      ],
-    );
-  }
-
-  Widget _buildStatsCards() {
     return Container(
-      constraints: BoxConstraints(maxHeight: 220),
-      child: FileInfoCardGridView(),
-    );
-  }
-
-  Widget _buildAnalyticsSection() {
-    return Responsive(
-      mobile: Column(
-        children: [
-          _buildCompactConversionFunnel(),
-          SizedBox(height: defaultPadding * 2),
-          _buildCompactUserGraph(),
-        ],
-      ),
-      tablet: Column(
-        children: [
-          _buildCompactConversionFunnel(),
-          SizedBox(height: defaultPadding * 2), 
-          _buildCompactUserGraph(),
-        ],
-      ),
-      desktop: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 2,
-            child: _buildCompactConversionFunnel(),
-          ),
-          SizedBox(width: defaultPadding),
-          Expanded(
-            flex: 3,
-            child: _buildCompactUserGraph(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActions() {
-    return Container(
-      padding: EdgeInsets.all(defaultPadding * 1.5),
-      decoration: DashboardTheme.cardDecoration,
+      padding: const EdgeInsets.all(defaultPadding * 1.5),
+      decoration: DashboardTheme.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.flash_on, color: DashboardTheme.accentColor, size: 24),
-              SizedBox(width: 12),
-              Text(
-                "Quick Actions",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: DashboardTheme.textPrimary,
-                ),
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [
+                  DashboardTheme.accentColor,
+                  DashboardTheme.primaryColor,
+                ]),
+                borderRadius: BorderRadius.circular(10),
               ),
-            ],
-          ),
-          SizedBox(height: defaultPadding),
+              child: const Icon(Icons.flash_on_rounded,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text('Quick Actions',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: DashboardTheme.textPrimary)),
+          ]),
+          const SizedBox(height: defaultPadding),
           Responsive(
-            mobile: Column(
-              children: _buildActionButtons(),
-            ),
+            mobile: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: actions.map(_buildBtn).toList()),
             tablet: Wrap(
-              spacing: defaultPadding,
-              runSpacing: defaultPadding,
-              children: _buildActionButtons(),
-            ),
+                spacing: 12,
+                runSpacing: 12,
+                children: actions.map(_buildBtn).toList()),
             desktop: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: _buildActionButtons(),
-            ),
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: actions.map(_buildBtn).toList()),
           ),
         ],
       ),
     );
   }
 
-  List<Widget> _buildActionButtons() {
-    return [
-      _buildActionButton(Icons.add_circle, "Add Video", DashboardTheme.accentColor),
-      _buildActionButton(Icons.person_add, "Add User", DashboardTheme.successColor),
-      _buildActionButton(Icons.article, "New Blog", DashboardTheme.primaryColor),
-      _buildActionButton(Icons.settings, "Settings", DashboardTheme.warningColor),
-    ];
-  }
-
-  Widget _buildActionButton(IconData icon, String label, Color color) {
-    return Container(
-      width: 120,
-      height: 80,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color.withOpacity(0.2), color.withOpacity(0.1)],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {},
+  Widget _buildBtn(_ActionData a) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Get.toNamed(a.route),
+        child: Container(
+          width: 110,
+          height: 88,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                a.color.withOpacity(0.18),
+                a.color.withOpacity(0.07),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: a.color.withOpacity(0.35), width: 1),
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color, size: 32),
-              SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: DashboardTheme.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
-              ),
+              Icon(a.icon, color: a.color, size: 30),
+              const SizedBox(height: 8),
+              Text(a.label,
+                  style: TextStyle(
+                      color: DashboardTheme.textPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
             ],
           ),
         ),
       ),
     );
   }
-
-  Widget _buildCompactConversionFunnel() {
-    return ConversionFunnelWidget();
-  }
-
-  Widget _buildCompactUserGraph() {
-    return UserJoinGraph();
-  }
 }
 
-class FileInfoCardGridView extends StatelessWidget {
-  const FileInfoCardGridView({
-    Key? key,
-    this.crossAxisCount = 4,
-    this.childAspectRatio = 1,
-  }) : super(key: key);
-
-  final int crossAxisCount;
-  final double childAspectRatio;
-
-  @override
-  Widget build(BuildContext context) {
-    final userController = Get.find<UserController>();
-    final VideosController videosController = Get.put(VideosController());
-    final BlogController blogController = Get.find<BlogController>();
-
-    return Obx(() {
-      final subscribedUsersCount = userController.users
-          .where((user) => 
-              !user.isDeleted && 
-              user.active == true && 
-              user.subscriptionStartDate != null)
-          .length;
-
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          int columns = 4;
-          if (constraints.maxWidth < 600) {
-            columns = 2;
-          } else if (constraints.maxWidth < 900) {
-            columns = 3;
-          }
-
-          return GridView.count(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            crossAxisCount: columns,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: constraints.maxWidth < 600 ? 1.5 : 1.8,
-            children: [
-              DarkFileInfoCard(
-                numOfFiles: videosController.videos.length,
-                icon: Icons.play_circle_filled,
-                title: "Videos",
-                subtitle: "Library",
-                color: DashboardTheme.accentColor,
-                trend: 12.5,
-              ),
-              DarkFileInfoCard(
-                numOfFiles: userController.users.length,
-                icon: Icons.people,
-                title: "Users",
-                subtitle: "Total",
-                color: DashboardTheme.successColor,
-                trend: 8.3,
-              ),
-              DarkFileInfoCard(
-                numOfFiles: subscribedUsersCount,
-                icon: Icons.star,
-                title: "Subscribers",
-                subtitle: "Premium",
-                color: DashboardTheme.primaryColor,
-                trend: 15.7,
-              ),
-              DarkFileInfoCard(
-                numOfFiles: blogController.blogData.length,
-                icon: Icons.article,
-                title: "Blogs",
-                subtitle: "Posts",
-                color: DashboardTheme.warningColor,
-                trend: 5.2,
-              ),
-            ],
-          );
-        },
-      );
-    });
-  }
-}
-
-class DarkFileInfoCard extends StatelessWidget {
-  const DarkFileInfoCard({
-    Key? key,
-    required this.numOfFiles,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    this.trend = 0,
-  }) : super(key: key);
-
-  final int numOfFiles;
+class _ActionData {
+  final String label;
   final IconData icon;
-  final String title, subtitle;
   final Color color;
-  final double trend;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: DashboardTheme.cardDecoration,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {},
-          child: Padding(
-            padding: EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [color.withOpacity(0.3), color.withOpacity(0.1)],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(icon, color: color, size: 18),
-                    ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: trend > 0 ? DashboardTheme.successColor.withOpacity(0.2) : 
-                               Colors.red.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            trend > 0 ? Icons.trending_up : Icons.trending_down,
-                            color: trend > 0 ? DashboardTheme.successColor : Colors.red,
-                            size: 10,
-                          ),
-                          SizedBox(width: 2),
-                          Text(
-                            "${trend.abs()}%",
-                            style: TextStyle(
-                              color: trend > 0 ? DashboardTheme.successColor : Colors.red,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  numOfFiles.toString(),
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: DashboardTheme.textPrimary,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: DashboardTheme.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: DashboardTheme.textMuted,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  final String route;
+  const _ActionData(this.label, this.icon, this.color, this.route);
 }
 
-class ConversionFunnelWidget extends StatelessWidget {
-  const ConversionFunnelWidget({Key? key}) : super(key: key);
+// ── Funnel + graph kept as-is from their own files ────────────────────────────
+class FileInfoCardGridView extends StatelessWidget {
+  const FileInfoCardGridView({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    final userController = Get.find<UserController>();
-
-    return Obx(() {
-      final funnelData = _calculateFunnelData(userController.users);
-      
-      return Container(
-        constraints: BoxConstraints(
-          minHeight: 400,
-          maxHeight: 600,
-        ),
-        padding: EdgeInsets.all(defaultPadding * 1.5),
-        decoration: DashboardTheme.cardDecoration,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildFunnelHeader(context),
-            SizedBox(height: defaultPadding * 1.5),
-            Expanded(
-              child: _buildCompactFunnelSteps(context, funnelData),
-            ),
-            SizedBox(height: defaultPadding),
-            _buildCompactMetrics(context, funnelData),
-          ],
-        ),
-      );
-    });
-  }
-
-  Widget _buildFunnelHeader(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [DashboardTheme.primaryColor, DashboardTheme.accentColor],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: DashboardTheme.primaryColor.withOpacity(0.3),
-                blurRadius: 15,
-                offset: Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Icon(Icons.analytics, color: Colors.white, size: 24),
-        ),
-        SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Conversion Funnel",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: DashboardTheme.textPrimary,
-                ),
-              ),
-              Text(
-                "Registration to subscription journey",
-                style: TextStyle(
-                  color: DashboardTheme.textSecondary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCompactFunnelSteps(BuildContext context, FunnelData data) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _buildCompactFunnelStep(
-          context, "Total Users", data.totalUsers, 100.0, DashboardTheme.accentColor, Icons.people),
-        _buildFunnelArrow(),
-        _buildCompactFunnelStep(
-          context, "Registered", data.registeredUsers, 
-          data.registrationConversionRate, DashboardTheme.successColor, Icons.person_add),
-        _buildFunnelArrow(),
-        _buildCompactFunnelStep(
-          context, "Subscribers", data.subscribedUsers, 
-          data.subscriptionConversionRate, DashboardTheme.primaryColor, Icons.star),
-      ],
-    );
-  }
-
-  Widget _buildCompactFunnelStep(
-      BuildContext context, String title, int count, double percentage, Color color, IconData icon) {
-    return Container(
-      height: 80,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color.withOpacity(0.2), color.withOpacity(0.1)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.2),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {},
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 24),
-                ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(title, 
-                        style: TextStyle(
-                          fontSize: 16, 
-                          fontWeight: FontWeight.bold, 
-                          color: DashboardTheme.textPrimary)),
-                      Text("${percentage.toStringAsFixed(1)}% conversion", 
-                        style: TextStyle(
-                          fontSize: 12, 
-                          color: DashboardTheme.textSecondary)),
-                    ],
-                  ),
-                ),
-                Text(count.toString(),
-                  style: TextStyle(
-                    fontSize: 28, 
-                    fontWeight: FontWeight.bold, 
-                    color: color)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFunnelArrow() {
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: 8),
-      child: Icon(Icons.keyboard_double_arrow_down, 
-        color: DashboardTheme.textMuted, size: 28),
-    );
-  }
-
-  Widget _buildCompactMetrics(BuildContext context, FunnelData data) {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            DashboardTheme.surfaceColor.withOpacity(0.5),
-            DashboardTheme.surfaceColor.withOpacity(0.3),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildMetricItem("Registration Rate", 
-            "${data.registrationConversionRate.toStringAsFixed(1)}%", DashboardTheme.successColor),
-          _buildMetricItem("Subscription Rate", 
-            "${data.subscriptionConversionRate.toStringAsFixed(1)}%", DashboardTheme.primaryColor),
-          _buildMetricItem("Reg→Sub Rate", 
-            "${data.registrationToSubscriptionRate.toStringAsFixed(1)}%", DashboardTheme.accentColor),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricItem(String title, String value, Color color) {
-    return Column(
-      children: [
-        Text(title, 
-          style: TextStyle(
-            fontSize: 12, 
-            color: DashboardTheme.textSecondary,
-            fontWeight: FontWeight.w500),
-          textAlign: TextAlign.center),
-        SizedBox(height: 8),
-        Text(value, 
-          style: TextStyle(
-            fontSize: 18, 
-            fontWeight: FontWeight.bold, 
-            color: color)),
-      ],
-    );
-  }
-
-  FunnelData _calculateFunnelData(List users) {
-    final totalUsers = users.where((user) => !user.isDeleted).length;
-    final registeredUsers = users.where((user) =>
-        !user.isDeleted && user.registrationDate != null).length;
-    final subscribedUsers = users.where((user) =>
-        !user.isDeleted &&
-        user.active == true &&
-        user.subscriptionStartDate != null).length;
-
-    return FunnelData(
-      totalUsers: totalUsers,
-      registeredUsers: registeredUsers,
-      subscribedUsers: subscribedUsers,
-    );
-  }
-}
-
-class FunnelData {
-  final int totalUsers;
-  final int registeredUsers;
-  final int subscribedUsers;
-
-  FunnelData({
-    required this.totalUsers,
-    required this.registeredUsers,
-    required this.subscribedUsers,
-  });
-
-  double get registrationConversionRate =>
-      totalUsers > 0 ? (registeredUsers / totalUsers) * 100 : 0;
-
-  double get subscriptionConversionRate =>
-      totalUsers > 0 ? (subscribedUsers / totalUsers) * 100 : 0;
-
-  double get registrationToSubscriptionRate =>
-      registeredUsers > 0 ? (subscribedUsers / registeredUsers) * 100 : 0;
+  Widget build(BuildContext context) => const _StatsGrid();
 }

@@ -109,21 +109,24 @@ class _AddBlogPageState extends State<AddBlogPage> {
       // Prepare blog data
       Map<String, dynamic> blogData = {
         'author': author,
-        'title': title,
-        'description': description,
+        'title_en': title,
+        'title_hi': title,
+        'description_en': description,
+        'description_hi': description,
         'category': category,
         'source': {
           'id': sourceId,
           'name': sourceName,
         },
         'url': url,
-        'content': content,
+        'content_en': content,
+        'content_hi': content,
         'urlToImage': urlToImage,
-        'publishedAt': DateTime.now().toIso8601String(), // Date saved as string
+        'publishedAt': DateTime.now().toIso8601String(),
       };
 
       // Save to Firestore
-      await FirebaseFirestore.instance.collection('blogs').add(blogData);
+      await FirebaseFirestore.instance.collection('blogsnew').add(blogData);
 
       blogController.fetchBlogs();
 

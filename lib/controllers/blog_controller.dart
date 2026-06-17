@@ -17,18 +17,23 @@ class BlogController extends GetxController {
   void fetchBlogs() async {
     try {
       isLoading.value = true;
-      final snapshot = await FirebaseFirestore.instance.collection('blogs').get();
+      final snapshot = await FirebaseFirestore.instance.collection('blogsnew').get();
       var blogs = snapshot.docs.map((doc) {
+        final data = doc.data();
         return {
           'id': doc.id,
-          'author': doc['author'],
-          'content': doc['content'],
-          'description': doc['description'],
-          'publishedAt': doc['publishedAt'],  // Store as string
-          'source': doc['source'],
-          'title': doc['title'],
-          'url': doc['url'],
-          'urlToImage': doc['urlToImage'],
+          'author': data['author'],
+          'content': data['content_en'] ?? data['content'],
+          'description': data['description_en'] ?? data['description'],
+          'description_en': data['description_en'] ?? data['description'],
+          'description_hi': data['description_hi'],
+          'publishedAt': data['publishedAt'],
+          'source': data['source'],
+          'title': data['title_en'] ?? data['title'],
+          'title_en': data['title_en'] ?? data['title'],
+          'title_hi': data['title_hi'],
+          'url': data['url'],
+          'urlToImage': data['urlToImage'],
         };
       }).toList();
 
@@ -60,7 +65,7 @@ class BlogController extends GetxController {
   // Delete blog post by ID
   Future<void> deleteBlog(String id) async {
     try {
-      await FirebaseFirestore.instance.collection('blogs').doc(id).delete();
+      await FirebaseFirestore.instance.collection('blogsnew').doc(id).delete();
       fetchBlogs();
       blogData.removeWhere((blog) => blog['id'] == id);
     } catch (e) {
@@ -75,7 +80,7 @@ class BlogController extends GetxController {
     }
 
     try {
-      var newDocRef = await FirebaseFirestore.instance.collection('blogs').add({
+      var newDocRef = await FirebaseFirestore.instance.collection('blogsnew').add({
         'title': title,
         'description': description,
         'content': content,
@@ -111,7 +116,7 @@ Future<void> updateBlog({
 }) async {
   try {
     // Update only the specified fields in Firebase
-    await FirebaseFirestore.instance.collection('blogs').doc(blogId).update(updatedFields);
+    await FirebaseFirestore.instance.collection('blogsnew').doc(blogId).update(updatedFields);
 
     // Update the local list with the modified fields
     int index = blogData.indexWhere((blog) => blog['id'] == blogId);

@@ -80,6 +80,17 @@ function formatPhoneNumber(phone) {
   return `+${phone}`;
 }
 
+// CORS — allow requests from the admin web app
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
@@ -156,7 +167,7 @@ app.post("/sendOtp", async (req, res) => {
   }
 
   //  Demo number for static otp
-  const demoNumber = "9057290632";
+  const demoNumber = "9112597757";
   let otp = generateOTP();
 
   if (phone === demoNumber) {
@@ -223,7 +234,7 @@ app.post("/verifyOtp", async (req, res) => {
     const timeDiff = (now - createdAt) / 1000; // Time difference in seconds
 
     // Demo number OTP verification
-    const demoNumber = "9057290632";
+    const demoNumber = "9112597757";
     let isOtpValid = data.otp === otp;
     if (phone === demoNumber) {
       isOtpValid = otp === "123456";
@@ -338,11 +349,11 @@ app.post("/sendNotification", async (req, res) => {
       body: `${title} is now available to watch.`,
     },
     data: {
-      click_action: "FLUTTER_NOTIFICATION_CLICK", // Important for tap-to-open
+      click_action: "FLUTTER_NOTIFICATION_CLICK",
       title: "New Video Uploaded!",
       body: `${title} is now available to watch.`,
     },
-    topic: "new-videos", // Users must be subscribed to this topic in the app
+    topic: "new-videos",
   };
 
   try {
@@ -351,10 +362,53 @@ app.post("/sendNotification", async (req, res) => {
     res.status(200).json({ message: "Notification sent successfully" });
   } catch (error) {
     console.error("❌ Failed to send notification:", error);
-    res.status(500).json({
-      message: "Failed to send notification",
-      error: error.message,
-    });
+    res.status(500).json({ message: "Failed to send notification", error: error.message });
+  }
+});
+
+// Broadcast custom notification to ALL users (festival wishes, events, announcements)
+app.post("/broadcastNotification", async (req, res) => {
+  const { title, body, token } = req.body;
+
+  if (!title) {
+    return res.status(400).json({ message: "title is required" });
+  }
+
+  const notificationBody = body || "";
+
+  try {
+    let response;
+    if (token) {
+      // Test mode: send to a specific device token only
+      const message = {
+        notification: { title, body: notificationBody },
+        data: {
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+          title,
+          body: notificationBody,
+        },
+        token,
+      };
+      response = await admin.messaging().send(message);
+      console.log("✅ Test notification sent to token:", response);
+    } else {
+      // Broadcast to ALL users subscribed to the 'all' topic
+      const message = {
+        notification: { title, body: notificationBody },
+        data: {
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+          title,
+          body: notificationBody,
+        },
+        topic: "all",
+      };
+      response = await admin.messaging().send(message);
+      console.log("✅ Broadcast notification sent:", response);
+    }
+    res.status(200).json({ message: "Notification sent successfully", response });
+  } catch (error) {
+    console.error("❌ Failed to send broadcast notification:", error);
+    res.status(500).json({ message: "Failed to send notification", error: error.message });
   }
 });
 app.post("/sendNotificationtest", async (req, res) => {

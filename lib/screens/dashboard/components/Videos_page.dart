@@ -17,85 +17,105 @@ class VideosPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: darkScaffoldBackground,
-      appBar: AppBar(
-        title: const Text(
-          "Videos Management",
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 24,
-            color: Colors.white,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: darkScaffoldBackground,
+        appBar: AppBar(
+          title: const Text(
+            "Videos Management",
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 24, color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFF1A202C),
+          elevation: 0,
+          bottom: const TabBar(
+            indicatorColor: Color(0xFF4299E1),
+            indicatorWeight: 3,
+            labelColor: Colors.white,
+            unselectedLabelColor: Color(0xFFA0AEC0),
+            labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+            tabs: [
+              Tab(icon: Icon(Icons.phone_android), text: 'App  (Android / iOS)'),
+              Tab(icon: Icon(Icons.tv), text: 'TV'),
+            ],
           ),
         ),
-        backgroundColor: const Color(0xFF1A202C),
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('bunny').snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Something went wrong',
-                      style: TextStyle(fontSize: 18, color: Colors.red[300]),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4299E1)),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Loading videos...',
-                      style: TextStyle(fontSize: 16, color: secondaryTextColor),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            final videos = snapshot.data!.docs
-                .map((doc) => BunnyVideo.fromFirestore(doc))
-                .toList();
-
-            videos.sort((a, b) => b.views.compareTo(a.views));
-
-            return Column(
-              children: [
-                VideosSummaryCards(videos: videos),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: VideosPageTable(videos: videos),
-                ),
-              ],
-            );
-          },
+        body: const TabBarView(
+          children: [
+            _PlatformVideosTab(collection: 'newvideos', sortByWatchHours: true),
+            _PlatformVideosTab(collection: 'bunny', sortByWatchHours: true),
+          ],
         ),
       ),
     );
   }
 }
 
+class _PlatformVideosTab extends StatelessWidget {
+  final String collection;
+  final bool sortByWatchHours;
+  const _PlatformVideosTab({Key? key, required this.collection, required this.sortByWatchHours}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection(collection).snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                  const SizedBox(height: 16),
+                  Text('Something went wrong', style: TextStyle(fontSize: 18, color: Colors.red[300])),
+                ],
+              ),
+            );
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4299E1))),
+                  SizedBox(height: 16),
+                  Text('Loading videos...', style: TextStyle(fontSize: 16, color: secondaryTextColor)),
+                ],
+              ),
+            );
+          }
+
+          final videos = snapshot.data!.docs.map((doc) => BunnyVideo.fromFirestore(doc)).toList();
+
+          if (sortByWatchHours) {
+            // App: sort by watch hours — true engagement metric
+            videos.sort((a, b) => b.watchSeconds.compareTo(a.watchSeconds));
+          } else {
+            // TV: no watch hours tracked yet, sort by views
+            videos.sort((a, b) => b.views.compareTo(a.views));
+          }
+
+          return Column(
+            children: [
+              VideosSummaryCards(videos: videos, sortByWatchHours: sortByWatchHours),
+              const SizedBox(height: 24),
+              Expanded(child: VideosPageTable(videos: videos, collection: collection, sortByWatchHours: sortByWatchHours)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class VideosSummaryCards extends StatelessWidget {
-  const VideosSummaryCards({Key? key, required this.videos}) : super(key: key);
+  const VideosSummaryCards({Key? key, required this.videos, required this.sortByWatchHours}) : super(key: key);
 
   final List<BunnyVideo> videos;
+  final bool sortByWatchHours;
 
   @override
   Widget build(BuildContext context) {
@@ -132,7 +152,11 @@ class VideosSummaryCards extends StatelessWidget {
             value: mostPopular?.title ?? 'No videos',
             icon: Icons.star,
             color: const Color(0xFFED8936),
-            subtitle: mostPopular != null ? '${_formatNumber(mostPopular!.views)} views' : '',
+            subtitle: mostPopular != null
+                ? sortByWatchHours
+                    ? '${mostPopular!.watchHoursText} watched • ${_formatNumber(mostPopular!.views)} views'
+                    : '${_formatNumber(mostPopular!.views)} views'
+                : '',
             isPopular: true,
           ),
         ),
@@ -249,9 +273,11 @@ class VideosSummaryCards extends StatelessWidget {
 }
 
 class VideosPageTable extends StatelessWidget {
-  const VideosPageTable({Key? key, required this.videos}) : super(key: key);
+  const VideosPageTable({Key? key, required this.videos, required this.collection, required this.sortByWatchHours}) : super(key: key);
 
   final List<BunnyVideo> videos;
+  final String collection;
+  final bool sortByWatchHours;
 
   void _launchURL(String url) {
     html.window.open(url, '_blank');
@@ -288,7 +314,7 @@ class VideosPageTable extends StatelessWidget {
             ElevatedButton(
               onPressed: () {
                 FirebaseFirestore.instance
-                    .collection('bunny')
+                    .collection(collection)
                     .doc(videoId)
                     .delete();
                 Navigator.of(context).pop();
@@ -328,8 +354,8 @@ class VideosPageTable extends StatelessWidget {
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
+                  children: [
+                    const Text(
                       'Video Library',
                       style: TextStyle(
                         fontSize: 28,
@@ -338,7 +364,7 @@ class VideosPageTable extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Manage your video collection • Sorted by views',
+                      'Sorted by watch hours',
                       style: TextStyle(
                         fontSize: 14,
                         color: secondaryTextColor,
@@ -364,7 +390,7 @@ class VideosPageTable extends StatelessWidget {
                           (states) => const Color(0xFF1A202C),
                         ),
                         headingRowHeight: 56,
-                        columns: const [
+                        columns: [
                           DataColumn(
                             label: Text(
                               "Title",
@@ -415,6 +441,23 @@ class VideosPageTable extends StatelessWidget {
                               ),
                             ),
                           ),
+                          if (sortByWatchHours)
+                            DataColumn(
+                              label: Row(
+                                children: [
+                                  Icon(Icons.timer, color: Colors.white, size: 16),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    "Watch Hours",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           DataColumn(
                             label: Row(
                               children: [
@@ -549,6 +592,23 @@ class VideosPageTable extends StatelessWidget {
                                 video.duration,
                                 style: const TextStyle(fontSize: 14, color: secondaryTextColor),
                               )),
+                              if (sortByWatchHours)
+                                DataCell(
+                                  Row(
+                                    children: [
+                                      Icon(Icons.timer, size: 16, color: isTopVideo ? Colors.orange[300] : secondaryTextColor),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        video.watchHoursText,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: isTopVideo ? FontWeight.w600 : FontWeight.w500,
+                                          color: isTopVideo ? Colors.orange[300] : secondaryTextColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               DataCell(
                                 Row(
                                   children: [
@@ -846,6 +906,7 @@ class BunnyVideo {
   final String title;
   final String videoUrl;
   final int views;
+  final int watchSeconds;
 
   BunnyVideo({
     required this.id,
@@ -863,26 +924,55 @@ class BunnyVideo {
     required this.title,
     required this.videoUrl,
     required this.views,
+    required this.watchSeconds,
   });
+
+  String get watchHoursText {
+    final h = watchSeconds ~/ 3600;
+    final m = (watchSeconds % 3600) ~/ 60;
+    if (h > 0) return '${h}h ${m}m';
+    if (m > 0) return '${m}m';
+    return '${watchSeconds}s';
+  }
 
   factory BunnyVideo.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+    // newvideos stores fields as multilingual maps {en: '...', hi: '...'}
+    // fall back to plain string if the field is stored as a simple string
+    String _str(dynamic val) {
+      if (val == null) return '';
+      if (val is String) return val;
+      if (val is Map) return (val['en'] ?? val.values.firstOrNull ?? '').toString();
+      return val.toString();
+    }
+
+    Timestamp _ts(dynamic val) {
+      if (val == null) return Timestamp.now();
+      if (val is Timestamp) return val;
+      if (val is String) {
+        try { return Timestamp.fromDate(DateTime.parse(val)); } catch (_) {}
+      }
+      return Timestamp.now();
+    }
+
     return BunnyVideo(
       id: doc.id,
-      category: data['category'] ?? '',
-      cbfc: data['cbfc'] ?? '',
-      createdAt: data['createdAt'] ?? Timestamp.now(),
-      description: data['description'] ?? '',
-      director: data['director'] ?? '',
-      duration: data['duration'] ?? '',
+      category: _str(data['category']),
+      cbfc: _str(data['cbfc']),
+      createdAt: _ts(data['createdAt']),
+      description: _str(data['description']),
+      director: _str(data['director']),
+      duration: _str(data['duration']),
       myList: data['myList'] ?? false,
-      releaseDate: data['releaseDate'] ?? Timestamp.now(),
-      releaseYear: data['releaseYear'] ?? '',
-      starcast: data['starcast'] ?? '',
+      releaseDate: _ts(data['releaseDate']),
+      releaseYear: _str(data['releaseYear']),
+      starcast: _str(data['starcast']),
       thumbnailUrl: data['thumbnailUrl'] ?? '',
-      title: data['title'] ?? '',
+      title: _str(data['title']),
       videoUrl: data['videoUrl'] ?? '',
       views: data['views'] ?? 0,
+      watchSeconds: data['watchSeconds'] ?? 0,
     );
   }
 }

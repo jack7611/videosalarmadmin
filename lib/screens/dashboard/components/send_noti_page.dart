@@ -35,7 +35,7 @@ class NotificationPage extends StatelessWidget {
       elevation: 0,
       backgroundColor: const Color(0xFF1A1A1A),
       title: const Text(
-        'Send Notification',
+        'New Video Notification',
         style: TextStyle(
           fontWeight: FontWeight.w700,
           fontSize: 24,
@@ -51,7 +51,7 @@ class NotificationPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Broadcast Message',
+          'New Video Alert',
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.w800,
@@ -61,9 +61,9 @@ class NotificationPage extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Compose and send a push notification to all app users.',
+          'Notify users when a new video is uploaded. Users receive: "New Video Uploaded! [title] is now available."',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 14,
             color: Colors.white60,
             fontWeight: FontWeight.w400,
           ),
@@ -128,16 +128,9 @@ class NotificationPage extends StatelessWidget {
           // Input Fields
           _buildTextField(
             controller: controller.titleController,
-            label: 'Notification Title (e.g., New Video Name)',
-            icon: Icons.title_rounded,
+            label: 'Video Name (e.g., Kedarnath Episode 1)',
+            icon: Icons.movie_creation_rounded,
             maxLength: 60,
-          ),
-          _buildTextField(
-            controller: controller.bodyController,
-            label: 'Notification Body (Optional)',
-            icon: Icons.article_rounded,
-            maxLines: 4,
-            maxLength: 150,
           ),
           const SizedBox(height: 24),
 
@@ -206,7 +199,7 @@ class NotificationPage extends StatelessWidget {
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              'This message will be sent as a broadcast to ALL users on both Android and iOS. This action cannot be undone.',
+              'Users subscribed to new-video alerts will receive: "New Video Uploaded! [video name] is now available to watch." This cannot be undone.',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 14,

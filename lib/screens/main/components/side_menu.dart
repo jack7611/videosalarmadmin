@@ -1,4 +1,5 @@
 import 'package:admin/controllers/admin_controller.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
@@ -319,37 +320,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Widget _buildNotificationButton(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
-        ),
-        child: Stack(
-          children: [
-            const Icon(
-              Icons.notifications_outlined,
-              color: Colors.white70,
-              size: 22,
-            ),
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return const _NotificationBell();
   }
 
   Widget _buildMobileMenuButton(BuildContext context) {
@@ -684,6 +655,8 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       _MenuItem("Notifications", "assets/icons/menu_profile.svg", '/noti'),
       _MenuItem("Creators", "assets/icons/menu_profile.svg", '/creators'),
       _MenuItem("Custom Notification", "assets/icons/menu_profile.svg", '/custom_notification'),
+      _MenuItem("Earnings Settings", "assets/icons/menu_profile.svg", '/earnings_settings'),
+      _MenuItem("Website Videos", "assets/icons/media.svg", '/website_videos'),
     ];
   }
 
@@ -697,4 +670,329 @@ class _MenuItem {
   final String route;
 
   _MenuItem(this.title, this.iconPath, this.route);
+}
+
+// ── Live notification bell with dropdown panel ─────────────────────────────────
+class _NotificationBell extends StatefulWidget {
+  const _NotificationBell();
+
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell> {
+  // Holds the live list of unread ticket snapshots
+  List<Map<String, dynamic>> _unread = [];
+  late final Stream<QuerySnapshot> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = FirebaseFirestore.instance
+        .collection('tickets')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Future<void> _markRead(String ticketId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('tickets')
+          .doc(ticketId)
+          .update({'isRead': true});
+    } catch (_) {}
+  }
+
+  String _timeAgo(dynamic ts) {
+    if (ts == null) return '';
+    final dt = (ts as Timestamp).toDate();
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          _unread = snapshot.data!.docs
+              .where((d) => (d.data() as Map<String, dynamic>)['isRead'] != true)
+              .map((d) => {
+                    ...(d.data() as Map<String, dynamic>),
+                    '_id': d.id,
+                  })
+              .toList();
+        }
+
+        final count = _unread.length;
+
+        return PopupMenuButton<String>(
+          offset: const Offset(0, 60),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.white.withOpacity(0.08)),
+          ),
+          color: const Color(0xFF12122A),
+          elevation: 20,
+          shadowColor: Colors.black.withOpacity(0.6),
+          onSelected: (value) {
+            if (value == '__all__') {
+              Get.toNamed('/tickets');
+            } else {
+              _markRead(value);
+              Get.toNamed('/tickets');
+            }
+          },
+          itemBuilder: (context) {
+            if (_unread.isEmpty) {
+              return [
+                PopupMenuItem(
+                  enabled: false,
+                  child: SizedBox(
+                    width: 300,
+                    child: Column(
+                      children: const [
+                        SizedBox(height: 12),
+                        Icon(Icons.notifications_off_outlined,
+                            color: Colors.white24, size: 40),
+                        SizedBox(height: 10),
+                        Text('No new notifications',
+                            style: TextStyle(color: Colors.white38, fontSize: 14)),
+                        SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+                ),
+              ];
+            }
+
+            final items = <PopupMenuEntry<String>>[];
+
+            // Header label
+            items.add(PopupMenuItem(
+              enabled: false,
+              height: 44,
+              child: SizedBox(
+                width: 320,
+                child: Row(
+                  children: [
+                    const Icon(Icons.notifications_active,
+                        color: Colors.red, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$count new ticket${count == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ));
+
+            items.add(const PopupMenuDivider());
+
+            // Up to 6 unread tickets
+            for (final ticket in _unread.take(6)) {
+              final id = ticket['_id'] as String;
+              final subject = ticket['subject'] ?? 'Support Request';
+              final category = ticket['category'] ?? '';
+              final name = ticket['name'] ?? 'User';
+              final time = _timeAgo(ticket['createdAt']);
+
+              items.add(PopupMenuItem<String>(
+                value: id,
+                height: 72,
+                padding: EdgeInsets.zero,
+                child: SizedBox(
+                  width: 320,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: Colors.red.shade400, width: 3),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(top: 3),
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                subject,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      category,
+                                      style: const TextStyle(
+                                        color: Colors.red,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    name,
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.5),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          time,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.35),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ));
+            }
+
+            if (_unread.length > 6) {
+              items.add(PopupMenuItem(
+                enabled: false,
+                height: 32,
+                child: Center(
+                  child: Text(
+                    '+${_unread.length - 6} more tickets',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.4), fontSize: 12),
+                  ),
+                ),
+              ));
+            }
+
+            items.add(const PopupMenuDivider());
+
+            // Footer — "View all"
+            items.add(PopupMenuItem<String>(
+              value: '__all__',
+              height: 44,
+              child: SizedBox(
+                width: 320,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.open_in_new, size: 15, color: Color(0xFF00D4FF)),
+                    SizedBox(width: 6),
+                    Text(
+                      'View all tickets',
+                      style: TextStyle(
+                        color: Color(0xFF00D4FF),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ));
+
+            return items;
+          },
+          // The bell icon itself
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: count > 0
+                      ? Colors.red.withOpacity(0.5)
+                      : Colors.white.withOpacity(0.1),
+                ),
+                color: count > 0
+                    ? Colors.red.withOpacity(0.08)
+                    : Colors.transparent,
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    count > 0
+                        ? Icons.notifications_active
+                        : Icons.notifications_outlined,
+                    color: count > 0 ? Colors.red.shade300 : Colors.white70,
+                    size: 22,
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        constraints: const BoxConstraints(
+                            minWidth: 18, minHeight: 18),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          count > 9 ? '9+' : '$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            height: 1,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }

@@ -34,9 +34,9 @@ class _EditBlogPageState extends State<EditBlogPage> {
 
   Future<void> _fetchBlogData() async {
     var blog = _controller.blogData.firstWhere((element) => element['id'] == widget.blogId);
-    titleController.text = blog['title'];
-    descriptionController.text = blog['description'];
-    contentController.text = blog['content'];
+    titleController.text = blog['title_en'] ?? blog['title'] ?? '';
+    descriptionController.text = blog['description_en'] ?? blog['description'] ?? '';
+    contentController.text = blog['content_en'] ?? blog['content'] ?? '';
     authorController.text = blog['author'];
     imageUrl = blog['urlToImage'];
     setState(() {});
@@ -99,13 +99,16 @@ class _EditBlogPageState extends State<EditBlogPage> {
       Map<String, dynamic> updatedFields = {};
 
       if (titleController.text.isNotEmpty) {
-        updatedFields['title'] = titleController.text;
+        updatedFields['title_en'] = titleController.text;
+        updatedFields['title_hi'] = titleController.text;
       }
       if (descriptionController.text.isNotEmpty) {
-        updatedFields['description'] = descriptionController.text;
+        updatedFields['description_en'] = descriptionController.text;
+        updatedFields['description_hi'] = descriptionController.text;
       }
       if (contentController.text.isNotEmpty) {
-        updatedFields['content'] = contentController.text;
+        updatedFields['content_en'] = contentController.text;
+        updatedFields['content_hi'] = contentController.text;
       }
       if (authorController.text.isNotEmpty) {
         updatedFields['author'] = authorController.text;

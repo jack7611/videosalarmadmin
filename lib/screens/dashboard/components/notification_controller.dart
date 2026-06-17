@@ -22,6 +22,7 @@ class NotificationController extends GetxController {
   }
 
   Future<void> sendNotification() async {
+    if (isLoading.value) return;
     if (!isTitleValid.value) {
       Get.snackbar(
         'Validation Error',
@@ -36,7 +37,7 @@ class NotificationController extends GetxController {
     isLoading.value = true;
 
     // Your provided API endpoint
-    const String apiUrl = 'http://165.22.215.103:3066/sendNotification';
+    const String apiUrl = 'https://videosalarm.com/api/sendNotification';
     final headers = {'Content-Type': 'application/json'};
     
     // Per your backend code, only the 'title' is required in the body.

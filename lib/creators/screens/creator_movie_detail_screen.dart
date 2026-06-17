@@ -76,6 +76,15 @@ class _CreatorMovieDetailScreenState extends State<CreatorMovieDetailScreen> {
     super.dispose();
   }
 
+  String _formatWatchTime(int secs) {
+    if (secs <= 0) return '0m';
+    if (secs < 60) return '${secs}s';
+    if (secs < 3600) return '${secs ~/ 60}m ${secs % 60}s';
+    final h = secs ~/ 3600;
+    final m = (secs % 3600) ~/ 60;
+    return '${h}h ${m}m';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -91,39 +100,120 @@ class _CreatorMovieDetailScreenState extends State<CreatorMovieDetailScreen> {
           bool isWide = constraints.maxWidth > 900;
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: Container(
-              padding: const EdgeInsets.all(32.0),
-              decoration: BoxDecoration(
-                color: secondaryColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: isWide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // LEFT COLUMN: Metadata
-                        Expanded(flex: 3, child: _buildLeftColumn()),
-                        const SizedBox(width: 40),
-                        // RIGHT COLUMN: Description & Video Action
-                        Expanded(flex: 2, child: _buildRightColumn()),
-                      ],
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildLeftColumn(),
-                        const SizedBox(height: 32),
-                        const Divider(color: Colors.white24),
-                        const SizedBox(height: 32),
-                        _buildRightColumn(),
-                      ],
-                    ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildStatsBar(),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(32.0),
+                  decoration: BoxDecoration(
+                    color: secondaryColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: isWide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 3, child: _buildLeftColumn()),
+                            const SizedBox(width: 40),
+                            Expanded(flex: 2, child: _buildRightColumn()),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLeftColumn(),
+                            const SizedBox(height: 32),
+                            const Divider(color: Colors.white24),
+                            const SizedBox(height: 32),
+                            _buildRightColumn(),
+                          ],
+                        ),
+                ),
+              ],
             ),
           );
         },
       ),
     );
   }
+
+  Widget _buildStatsBar() {
+    final views = widget.movie.viewsCount;
+    final watchSecs = widget.movie.watchSecondsCount;
+    final watchTime = _formatWatchTime(watchSecs);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: secondaryColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Row(children: [
+        _statCell(
+          icon: Icons.visibility_rounded,
+          value: '$views',
+          label: 'Total Views',
+          color: Colors.blueAccent,
+        ),
+        _statDivider(),
+        _statCell(
+          icon: Icons.access_time_rounded,
+          value: watchTime,
+          label: 'Watch Time',
+          color: Colors.amber,
+        ),
+        _statDivider(),
+        _statCell(
+          icon: Icons.trending_up_rounded,
+          value: views > 500
+              ? 'Trending'
+              : views > 100
+                  ? 'Growing'
+                  : 'New',
+          label: 'Status',
+          color: Colors.greenAccent,
+        ),
+      ]),
+    );
+  }
+
+  Widget _statCell(
+      {required IconData icon,
+      required String value,
+      required String label,
+      required Color color}) {
+    return Expanded(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(height: 8),
+          Text(value,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white38, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _statDivider() =>
+      Container(width: 1, height: 56, color: Colors.white12);
 
   // --- Components ---
 
@@ -148,7 +238,8 @@ class _CreatorMovieDetailScreenState extends State<CreatorMovieDetailScreen> {
         _buildMetaRow(Icons.timer, "Duration:", widget.movie.durationText),
         _buildMetaRow(Icons.calendar_today, "Release Year:", widget.movie.yearText),
         _buildMetaRow(Icons.star, "Starcast:", widget.movie.starcast?['en'] ?? "N/A", isLongText: true),
-        // _buildMetaRow(Icons.visibility, "Views:", "${widget.movie.viewsCount}"),
+        _buildMetaRow(Icons.visibility, "Total Views:", "${widget.movie.viewsCount}"),
+        _buildMetaRow(Icons.access_time, "Watch Time:", _formatWatchTime(widget.movie.watchSecondsCount)),
         _buildMetaRow(Icons.add_circle, "Created:", _formatDate(widget.movie.createdAt)),
         _buildMetaRow(Icons.update, "Released:", _formatDate(widget.movie.releaseDate)),
       ],

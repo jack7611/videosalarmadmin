@@ -4,17 +4,12 @@ import 'dart:html' as html;
 import 'package:get/get.dart';
 import 'package:admin/creators/controllers/creator_movie_controller.dart';
 import 'package:admin/creators/components/creator_movie_card.dart';
+import 'package:admin/creators/screens/creator_add_movie_screen.dart';
+import 'package:admin/creators/screens/creator_payment_history_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class CreatorDashboardScreen extends StatelessWidget {
   const CreatorDashboardScreen({super.key});
-
-  String _formatNumber(int number) {
-    return number.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]},',
-    );
-  }
 
   void _performLogout() async {
     html.window.localStorage.remove('isCreatorLoggedIn');
@@ -108,108 +103,6 @@ class CreatorDashboardScreen extends StatelessWidget {
     );
   }
 
-  void _showEarningsDialog(BuildContext context, int totalViews) {
-    final earnings = totalViews * 10;
-    final formattedViews = _formatNumber(totalViews);
-    final formattedEarnings = _formatNumber(earnings);
-
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Container(
-          width: 380,
-          padding: const EdgeInsets.all(28.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.account_balance_wallet,
-                    color: Colors.white, size: 32),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                "Your Earnings",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                ),
-                child: Column(
-                  children: [
-                    const Text("Total Views",
-                        style: TextStyle(color: Colors.white54, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Text(
-                      formattedViews,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(color: Colors.white12),
-                    const SizedBox(height: 16),
-                    const Text("Estimated Earnings",
-                        style: TextStyle(color: Colors.white54, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Text(
-                      "₹ $formattedEarnings",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      "₹10 per view",
-                      style: TextStyle(color: Colors.white38, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text("Close",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final name = html.window.localStorage['creatorName'] ?? 'Creator';
@@ -219,40 +112,50 @@ class CreatorDashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Creator Dashboard", style: TextStyle(fontSize: 32)),
         actions: [
-          // Wallet earnings button
-          Obx(() {
-            final totalViews = controller.movies.fold<int>(
-              0,
-              (sum, movie) => sum + ((movie.views ?? 0) as int),
-            );
-            final earnings = totalViews * 10;
-            final formattedEarnings = _formatNumber(earnings);
-
-            return Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: TextButton.icon(
-                onPressed: () => _showEarningsDialog(context, totalViews),
-                icon: const Icon(Icons.account_balance_wallet,
-                    color: Colors.white, size: 20),
-                label: Text(
-                  "₹ $formattedEarnings",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.white.withOpacity(0.1),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: TextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const CreatorPaymentHistoryScreen()),
               ),
-            );
-          }),
-
-          // Logout button
+              icon: const Icon(Icons.account_balance_wallet_rounded,
+                  color: Colors.white, size: 20),
+              label: const Text('My Payments',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFFF59E0B).withOpacity(0.85),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: TextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const CreatorAddMovieScreen()),
+              ),
+              icon: const Icon(Icons.add_rounded,
+                  color: Colors.white, size: 20),
+              label: const Text('Upload Movie',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1).withOpacity(0.85),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: TextButton.icon(

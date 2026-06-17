@@ -28,7 +28,7 @@ class MainScreen extends StatelessWidget {
       color: Colors.black,
       child: Center(
         child: Text(
-          "© 2025 VideosAlarm Admin. All Rights Reserved.",
+          "© 2026 VideosAlarm Admin. All Rights Reserved.",
           style: TextStyle(color: Colors.white54, fontSize: 14),
         ),
       ),

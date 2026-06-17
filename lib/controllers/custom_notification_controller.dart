@@ -44,7 +44,9 @@ class CustomNotificationController extends GetxController {
   }
 
   Future<void> sendNotification() async {
-    print("Attempting to send notification..."); // DEBUG
+    // Hard guard — prevents double-send if called twice before isLoading propagates
+    if (isLoading.value) return;
+
     if (!isTitleValid.value) {
       Get.snackbar('Error', 'Title is required', backgroundColor: Colors.orange, colorText: Colors.white);
       return;
@@ -56,7 +58,7 @@ class CustomNotificationController extends GetxController {
     }
 
     isLoading.value = true;
-    const String apiUrl = 'http://165.22.215.103:3066/sendNotification';
+    const String apiUrl = 'https://videosalarm.com/api/broadcastNotification';
     final headers = {'Content-Type': 'application/json'};
 
     Map<String, dynamic> requestBody = {

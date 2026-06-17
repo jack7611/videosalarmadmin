@@ -97,6 +97,60 @@ class _CreatorSignInPageState extends State<CreatorSignInPage> {
                               : const Text('Sign In'),
                         ),
                       )),
+
+                  // Error / Inactive message
+                  Obx(() {
+                    final msg = controller.errorMessage.value;
+                    if (msg.isEmpty) return const SizedBox.shrink();
+
+                    final isInactive = msg.contains('inactive');
+                    final bgColor = isInactive
+                        ? const Color(0xFFFFF3CD)
+                        : const Color(0xFFFFEBEE);
+                    final borderColor = isInactive
+                        ? const Color(0xFFFFB300)
+                        : const Color(0xFFE53935);
+                    final iconColor = isInactive
+                        ? const Color(0xFFFF8F00)
+                        : const Color(0xFFE53935);
+                    final textColor = isInactive
+                        ? const Color(0xFF5D4037)
+                        : const Color(0xFFB71C1C);
+                    final icon = isInactive
+                        ? Icons.lock_clock_outlined
+                        : Icons.error_outline_rounded;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: borderColor, width: 1.2),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(icon, color: iconColor, size: 22),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                msg,
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),

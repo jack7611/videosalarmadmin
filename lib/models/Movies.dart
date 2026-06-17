@@ -19,6 +19,7 @@ class Movie {
   final Timestamp? createdAt;
   final Timestamp? releaseDate;
   final int? views;
+  final int? watchSeconds;
 
   final bool active;
 
@@ -39,6 +40,7 @@ class Movie {
     this.createdAt,
     this.releaseDate,
     this.views,
+    this.watchSeconds,
     required this.active,
     required String titleText,
     required String categoryText,
@@ -55,6 +57,7 @@ class Movie {
   String get durationText => duration?['en'] ?? '';
   String get yearText => releaseYear?['en'] ?? '';
   int get viewsCount => views ?? 0;
+  int get watchSecondsCount => watchSeconds ?? 0;
 
   // factory Movie.fromFirestore(String id, Map<String, dynamic> data) {
   //   return Movie(
@@ -136,6 +139,7 @@ class Movie {
               : null,
       releaseDate: data['releaseDate'],
       views: data['views'],
+      watchSeconds: data['watchSeconds'] as int?,
       active: data['active'] ?? true,
       titleText: '',
       categoryText: '',

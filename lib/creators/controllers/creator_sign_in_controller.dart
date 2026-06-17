@@ -61,28 +61,41 @@ class CreatorSignInController extends GetxController {
     isLoading.value = true;
 
     try {
-      final snapshot = await FirebaseFirestore.instance
+      // Step 1: Check credentials (email + password), ignore active status
+      final credSnap = await FirebaseFirestore.instance
           .collection('creators')
           .where('email', isEqualTo: email)
           .where('password', isEqualTo: password)
-          .where('active', isEqualTo: true) // Only active creators
           .limit(1)
           .get();
-      if (snapshot.docs.isNotEmpty) {
-        final doc = snapshot.docs.first;
-        // Success
-        html.window.localStorage['isCreatorLoggedIn'] = 'true';
-        html.window.localStorage['creatorId'] = doc.id;
-        html.window.localStorage['creatorName'] = doc['name'] ?? 'Creator';
 
-        Get.offAll(() => const CreatorDashboardScreen());
-        Get.snackbar("Success", "Welcome back, ${doc['name']}",
-            backgroundColor: Colors.green, colorText: Colors.white);
-      } else {
-        _showError("Wrong creator credential");
+      if (credSnap.docs.isEmpty) {
+        // No matching credentials at all
+        _showError('Invalid email or password. Please try again.');
+        return;
       }
+
+      final doc = credSnap.docs.first;
+      final isActive = doc.data()['active'] ?? false;
+
+      if (!isActive) {
+        // Credentials are correct but account is inactive
+        _showError(
+          'Your account is inactive.\nPlease contact the admin or owner to activate your account.',
+        );
+        return;
+      }
+
+      // Step 2: Credentials valid + active → log in
+      html.window.localStorage['isCreatorLoggedIn'] = 'true';
+      html.window.localStorage['creatorId'] = doc.id;
+      html.window.localStorage['creatorName'] = doc['name'] ?? 'Creator';
+
+      Get.offAll(() => const CreatorDashboardScreen());
+      Get.snackbar('Success', 'Welcome back, ${doc['name']}',
+          backgroundColor: Colors.green, colorText: Colors.white);
     } catch (e) {
-       _showError("Login failed: $e");
+      _showError('Login failed: $e');
     } finally {
       isLoading.value = false;
     }

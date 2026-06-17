@@ -109,7 +109,7 @@ class MoviesPage extends StatelessWidget {
                   ),
                   SizedBox(height: 4),
                   Text(
-                    "Manage your video collection • Sorted by views",
+                    "Manage your video collection • Newest first",
                     style: TextStyle(color: Colors.white54),
                   ),
                 ],
@@ -124,9 +124,10 @@ class MoviesPage extends StatelessWidget {
             /// Table Rows
             Expanded(
               child: StreamBuilder(
+                // No orderBy — mixed createdAt types (String vs Timestamp)
+                // in legacy docs break Firestore ordering. Sort client-side.
                 stream: FirebaseFirestore.instance
-                    .collection('movies')
-                    .orderBy('views', descending: true)
+                    .collection('newvideos')
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -142,14 +143,26 @@ class MoviesPage extends StatelessWidget {
                     );
                   }
 
-                  return ListView(
-                    children: snapshot.data!.docs.map((doc) {
-                      final movie = Movie.fromFirestore(
-                        doc.id,
-                        doc.data() as Map<String, dynamic>,
-                      );
+                  // Client-side sort: newest createdAt first.
+                  // Handles Timestamp, ISO-8601 String, and missing field.
+                  final docs = List.of(snapshot.data!.docs)
+                    ..sort((a, b) {
+                      final aMs = _docCreatedAtMs(
+                          a.data() as Map<String, dynamic>);
+                      final bMs = _docCreatedAtMs(
+                          b.data() as Map<String, dynamic>);
+                      return bMs.compareTo(aMs); // descending
+                    });
 
+                  return ListView.builder(
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final movie = Movie.fromFirestore(
+                        docs[index].id,
+                        docs[index].data() as Map<String, dynamic>,
+                      );
                       return VideoRow(
+                        srNo: index + 1,
                         id: movie.id,
                         title: movie.titleText,
                         category: movie.categoryText,
@@ -162,7 +175,7 @@ class MoviesPage extends StatelessWidget {
                         isShown: movie.active,
                         movieModel: movie,
                       );
-                    }).toList(),
+                    },
                   );
                 },
               ),
@@ -179,6 +192,7 @@ class MoviesPage extends StatelessWidget {
       color: const Color(0xFF020617),
       child: const Row(
         children: [
+          _HeaderCell("#", flex: 1),
           _HeaderCell("Title", flex: 3),
           _HeaderCell("Category", flex: 2),
           _HeaderCell("Director", flex: 3),
@@ -203,10 +217,28 @@ String _formatViews(int views) {
   return views.toString();
 }
 
+// Returns milliseconds from epoch for a doc's createdAt field.
+// Handles Firestore Timestamp, ISO-8601 String, and missing/null — returns 0
+// for missing so those docs sort to the bottom.
+int _docCreatedAtMs(Map<String, dynamic> data) {
+  final raw = data['createdAt'];
+  if (raw == null) return 0;
+  if (raw is Timestamp) return raw.millisecondsSinceEpoch;
+  if (raw is String) {
+    try {
+      return DateTime.parse(raw).millisecondsSinceEpoch;
+    } catch (_) {
+      return 0;
+    }
+  }
+  return 0;
+}
+
 /// --------------------
 /// Video Row Widget
 /// --------------------
 class VideoRow extends StatelessWidget {
+  final int srNo;
   final String id;
   final String title;
   final String category;
@@ -221,6 +253,7 @@ class VideoRow extends StatelessWidget {
 
   const VideoRow({
     super.key,
+    required this.srNo,
     required this.id,
     required this.title,
     required this.category,
@@ -244,6 +277,27 @@ class VideoRow extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Serial number
+          Expanded(
+            flex: 1,
+            child: Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '$srNo',
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
           Expanded(
             flex: 3,
             child: Column(
@@ -296,7 +350,7 @@ class VideoRow extends StatelessWidget {
               value: isShown,
               onChanged: (value) async {
                 await FirebaseFirestore.instance
-                    .collection('movies')
+                    .collection('newvideos')
                     .doc(id)
                     .update({'isShown': value});
               },

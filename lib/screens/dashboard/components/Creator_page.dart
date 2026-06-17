@@ -1,5 +1,6 @@
 import 'package:admin/controllers/creator_controller.dart';
 import 'package:admin/models/Creator.dart';
+import 'package:admin/screens/dashboard/components/creator_detail_page.dart';
 import 'package:admin/screens/dashboard/components/creator_form_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -228,7 +229,7 @@ class CreatorPage extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: 24),
                 child: PaginatedDataTable(
                   key: ValueKey(
-                      '${creatorController.rowsPerPage.value}_${creatorController.filteredCreators.hashCode}'),
+                      '${creatorController.rowsPerPage.value}_${creatorController.filteredCreators.hashCode}_${creatorController.creatorEarnings.hashCode}_${creatorController.releaseVersion.value}'),
                   headingRowColor:
                       MaterialStateProperty.all(const Color(0xFF0F0F0F)),
                   horizontalMargin: 0,
@@ -260,12 +261,30 @@ class CreatorPage extends StatelessWidget {
                       label: Text('Status', style: _headerTextStyle()),
                     ),
                     DataColumn(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.account_balance_wallet_rounded,
+                              size: 16, color: Color(0xFF10B981)),
+                          SizedBox(width: 6),
+                          Text('Wallet', style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            color: Color(0xFF10B981),
+                            letterSpacing: -0.2,
+                          )),
+                        ],
+                      ),
+                    ),
+                    DataColumn(
                       label: Text('Actions', style: _headerTextStyle()),
                     ),
                   ],
                   source: _CreatorDataSource(
                     creatorController: creatorController,
                     context: context,
+                    earnings: creatorController.creatorEarnings,
+                    ratePerHour: creatorController.ratePerWatchHour.value,
                   ),
                 ),
               ),
@@ -299,13 +318,21 @@ class CreatorPage extends StatelessWidget {
 class _CreatorDataSource extends DataTableSource {
   final CreatorController creatorController;
   final BuildContext context;
+  final Map<String, double> earnings;
+  final double ratePerHour;
 
-  _CreatorDataSource({required this.creatorController, required this.context});
+  _CreatorDataSource({
+    required this.creatorController,
+    required this.context,
+    required this.earnings,
+    required this.ratePerHour,
+  });
 
   @override
   DataRow getRow(int index) {
     if (index >= creatorController.filteredCreators.length) {
       return const DataRow(cells: [
+        DataCell(Text('')),
         DataCell(Text('')),
         DataCell(Text('')),
         DataCell(Text('')),
@@ -471,9 +498,70 @@ class _CreatorDataSource extends DataTableSource {
           ),
         ),
         DataCell(
+          Builder(builder: (context) {
+            final available = creatorController.availableWallet(creator.id);
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: available > 0
+                    ? Colors.green.withOpacity(0.12)
+                    : Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: available > 0
+                      ? Colors.green.withOpacity(0.4)
+                      : Colors.white10,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.account_balance_wallet_rounded,
+                    size: 14,
+                    color: available > 0 ? Colors.greenAccent : Colors.white38,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '₹${available.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      color: available > 0 ? Colors.greenAccent : Colors.white38,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ),
+        DataCell(
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          CreatorDetailPage(creator: creator),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.bar_chart_rounded,
+                    color: Color(0xFF10B981), size: 20),
+                label: const Text('View',
+                    style: TextStyle(color: Color(0xFF10B981))),
+                style: TextButton.styleFrom(
+                  backgroundColor:
+                      const Color(0xFF10B981).withOpacity(0.1),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                ),
+              ),
+              const SizedBox(width: 8),
               TextButton.icon(
                 onPressed: () {
                   showDialog(
@@ -509,6 +597,29 @@ class _CreatorDataSource extends DataTableSource {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
+              const SizedBox(width: 8),
+              Builder(builder: (context) {
+                final available = creatorController.availableWallet(creator.id);
+                return TextButton.icon(
+                  onPressed: available > 0
+                      ? () => _showReleaseDialog(context, creatorController, creator, available)
+                      : null,
+                  icon: Icon(Icons.payments_rounded,
+                      color: available > 0 ? const Color(0xFFF59E0B) : Colors.white24,
+                      size: 20),
+                  label: Text('Release',
+                      style: TextStyle(
+                          color: available > 0 ? const Color(0xFFF59E0B) : Colors.white24)),
+                  style: TextButton.styleFrom(
+                    backgroundColor: available > 0
+                        ? const Color(0xFFF59E0B).withOpacity(0.1)
+                        : Colors.white.withOpacity(0.03),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                );
+              }),
             ],
           ),
         ),
@@ -524,6 +635,167 @@ class _CreatorDataSource extends DataTableSource {
 
   @override
   int get selectedRowCount => 0;
+
+  Future<void> _showReleaseDialog(
+      BuildContext context,
+      CreatorController creatorController,
+      Creator creator,
+      double available) async {
+    final maxAmount = double.parse(available.toStringAsFixed(2));
+    final amountController =
+        TextEditingController(text: maxAmount.toStringAsFixed(2));
+    final noteController = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        bool releasing = false;
+        String? amountError;
+        return StatefulBuilder(builder: (ctx, setState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.payments_rounded, color: Color(0xFFF59E0B), size: 28),
+                SizedBox(width: 12),
+                Text(
+                  'Release Payment',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20, color: Colors.white),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Creator: ${creator.name ?? 'N/A'}   •   Available: ₹${maxAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(color: Colors.white54, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(
+                      color: Color(0xFFF59E0B), fontSize: 18, fontWeight: FontWeight.w700),
+                  onChanged: (_) => setState(() => amountError = null),
+                  decoration: InputDecoration(
+                    labelText: 'Amount to Release (₹)',
+                    labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                    prefixIcon: const Icon(Icons.currency_rupee_rounded,
+                        color: Color(0xFFF59E0B), size: 20),
+                    errorText: amountError,
+                    filled: true,
+                    fillColor: const Color(0xFF0F0F0F),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFF59E0B), width: 2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: noteController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Note (e.g. UPI transfer, bank ref)',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    prefixIcon: const Icon(Icons.note_rounded, color: Colors.white38, size: 20),
+                    filled: true,
+                    fillColor: const Color(0xFF0F0F0F),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '⚠️ Make sure you have physically transferred this amount before confirming.',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: releasing ? null : () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF59E0B),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  disabledBackgroundColor: Colors.grey.withOpacity(0.3),
+                ),
+                onPressed: releasing
+                    ? null
+                    : () async {
+                        final parsed =
+                            double.tryParse(amountController.text.trim());
+                        if (parsed == null || parsed <= 0) {
+                          setState(() => amountError = 'Enter a valid amount');
+                          return;
+                        }
+                        if (parsed > maxAmount) {
+                          setState(() => amountError =
+                              'Cannot exceed available ₹${maxAmount.toStringAsFixed(2)}');
+                          return;
+                        }
+                        setState(() => releasing = true);
+                        final error = await creatorController.releasePayment(
+                          creatorId: creator.id,
+                          creatorName: creator.name ?? '',
+                          amount: parsed,
+                          note: noteController.text.trim(),
+                        );
+                        // Pop BEFORE dispose — TextField must be gone first
+                        Navigator.of(ctx).pop();
+                        if (error == null) {
+                          // Refresh from Firestore to keep data accurate
+                          creatorController.fetchReleasedAmounts();
+                          Get.snackbar(
+                            'Payment Released',
+                            '₹${parsed.toStringAsFixed(2)} released for ${creator.name}',
+                            backgroundColor: Colors.green,
+                            colorText: Colors.white,
+                            snackPosition: SnackPosition.BOTTOM,
+                            duration: const Duration(seconds: 4),
+                          );
+                        } else {
+                          Get.snackbar(
+                            'Firebase Error',
+                            error,
+                            backgroundColor: Colors.red,
+                            colorText: Colors.white,
+                            snackPosition: SnackPosition.BOTTOM,
+                            duration: const Duration(seconds: 8),
+                            margin: const EdgeInsets.all(16),
+                          );
+                        }
+                      },
+                icon: releasing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.black))
+                    : const Icon(Icons.check_rounded, size: 18),
+                label: Text(releasing ? 'Saving...' : 'Confirm Release'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+    // Safe to dispose after dialog is fully closed
+    amountController.dispose();
+    noteController.dispose();
+  }
 
   void _showDeleteDialog(
       BuildContext context, CreatorController creatorController, Creator creator) {

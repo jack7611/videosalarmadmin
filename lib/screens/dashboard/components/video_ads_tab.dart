@@ -1,7 +1,6 @@
 import 'package:admin/screens/dashboard/components/constraints.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class VideoAdsTab extends StatefulWidget {
@@ -21,26 +20,27 @@ class VideoAdsTab extends StatefulWidget {
   @override
   State<VideoAdsTab> createState() => _VideoAdsTabState();
 
-  // Static Method to Load Video Ads
+  // Ads stored as subcollections: newvideos/{videoId}/ads/{adId}
   static Future<void> loadVideoAds(
     StateSetter setState,
     BuildContext context,
     Function(bool) setIsLoading,
     Function(List<Map<String, dynamic>>) setVideoAds,
   ) async {
-    setState(() {
-      setIsLoading(true);
-    });
+    setState(() => setIsLoading(true));
 
     try {
-      // Implement Logic to Load Video From Firebase
-
       final QuerySnapshot<Map<String, dynamic>> querySnapshot =
-          await FirebaseFirestore.instance.collection(videoAdsCollection).get();
-      List<Map<String, dynamic>> videoAds = querySnapshot.docs
+          await FirebaseFirestore.instance
+              .collectionGroup(videoAdsCollection)
+              .get();
+
+      final List<Map<String, dynamic>> videoAds = querySnapshot.docs
           .map((doc) => {
                 ...doc.data(),
                 'id': doc.id,
+                // parent ref: newvideos/{videoId}/ads/{adId}
+                'videoId': doc.reference.parent.parent?.id ?? '',
               })
           .toList();
 
@@ -50,10 +50,8 @@ class VideoAdsTab extends StatefulWidget {
       });
     } catch (e) {
       print("Error loading video ads: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load video ads: $e')),
-      );
       setState(() {
+        setVideoAds([]);
         setIsLoading(false);
       });
     }
@@ -62,19 +60,25 @@ class VideoAdsTab extends StatefulWidget {
 
 class _VideoAdsTabState extends State<VideoAdsTab> {
   String? _videoAdUrl;
-  String _videoAdPlacement = '';
-  double _videoAdStartTimestamp = 0; // Start time in seconds
-  double _videoAdEndTimestamp = 10; // End time in seconds
+  // 'pre-roll' | 'mid-roll' | 'post-roll'
+  String _videoAdPlacementType = 'pre-roll';
+  double _videoAdStartTimestamp = 0;
+  double _videoAdEndTimestamp = 30;
   VideoPlayerController? _videoPlayerController;
-  String? _selectedVideoToPlaceAdOnId; // ID of the Video to place the ad on
-  double _videoDuration = 10; // Default duration
+  String? _selectedVideoToPlaceAdOnId;
+  double _videoDuration = 3600; // default 1 hour; updated when target video selected
+  bool _isLoadingTargetDuration = false;
 
-  //Video data for place ads
   List<Map<String, dynamic>> _availableVideos = [];
   bool _isLoadingAvailableVideos = true;
 
-  // New variable for description
   String _adDescription = '';
+
+  static const Map<String, String> _placementLabels = {
+    'pre-roll': 'Pre-roll (plays before video starts)',
+    'mid-roll': 'Mid-roll (plays at custom timestamp)',
+    'post-roll': 'Post-roll (plays after video ends)',
+  };
 
   @override
   void initState() {
@@ -88,178 +92,243 @@ class _VideoAdsTabState extends State<VideoAdsTab> {
     super.dispose();
   }
 
+  // ── Target video selection: load actual duration ──────────────────────────
+  Future<void> _onTargetVideoSelected(String value) async {
+    final selected = _availableVideos.firstWhere(
+      (v) => v['videoId'] == value,
+      orElse: () => {},
+    );
+    final url = (selected['videoUrl'] as String?) ?? '';
+
+    setState(() {
+      _selectedVideoToPlaceAdOnId = value;
+      _isLoadingTargetDuration = url.isNotEmpty;
+      _videoDuration = 3600;
+      _videoAdStartTimestamp = 0;
+      _videoAdEndTimestamp = 30;
+    });
+
+    if (url.isNotEmpty) {
+      final dur = await _getVideoDuration(url);
+      if (mounted) {
+        setState(() {
+          _videoDuration = dur > 10 ? dur : 3600;
+          _isLoadingTargetDuration = false;
+        });
+      }
+    } else {
+      setState(() => _isLoadingTargetDuration = false);
+    }
+  }
+
+  // ── Upload ad ─────────────────────────────────────────────────────────────
   Future<void> _uploadVideoAd() async {
-    if ((_videoAdUrl == null) ||
-        _videoAdPlacement.isEmpty ||
-        _selectedVideoToPlaceAdOnId == null ||
-        _adDescription.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Please select a video URL, enter placement details, Ad description and select a video to place the ad on.'),
-        ),
-      );
+    if (_videoAdUrl == null || _videoAdUrl!.isEmpty) {
+      _snack('Please enter the ad video URL.');
+      return;
+    }
+    if (_selectedVideoToPlaceAdOnId == null) {
+      _snack('Please select a target video.');
+      return;
+    }
+    if (_adDescription.isEmpty) {
+      _snack('Please enter an ad description.');
       return;
     }
 
-    // Validate that the end timestamp is after the start timestamp
-    if (_videoAdEndTimestamp <= _videoAdStartTimestamp) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('End timestamp must be greater than start timestamp.'),
-        ),
-      );
-      return;
+    // Compute start/end based on placement type
+    double start, end;
+    switch (_videoAdPlacementType) {
+      case 'pre-roll':
+        start = 0;
+        end = 30;
+        break;
+      case 'post-roll':
+        start = _videoDuration;
+        end = _videoDuration + 30;
+        break;
+      default: // mid-roll
+        start = _videoAdStartTimestamp;
+        end = _videoAdEndTimestamp;
+        if (end <= start) {
+          _snack('End timestamp must be after start timestamp.');
+          return;
+        }
     }
 
-    // Check for overlapping ads
-    bool isOverlapping = await _checkIfAdOverlaps(_selectedVideoToPlaceAdOnId!,
-        _videoAdStartTimestamp, _videoAdEndTimestamp);
-    if (isOverlapping) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ad exists in this timeframe.'),
-        ),
-      );
-      return; // Stop the upload
+    // Overlap check — only one equality filter to avoid Firestore index requirement
+    try {
+      final isOverlapping = await _checkIfAdOverlaps(
+          _selectedVideoToPlaceAdOnId!, _videoAdPlacementType);
+      if (isOverlapping) {
+        _snack('A ${_videoAdPlacementType} ad already exists for this video. Delete it first.');
+        return;
+      }
+    } catch (_) {
+      // If overlap check fails, proceed with upload anyway
     }
 
     try {
-      String videoUrl;
+      final targetTitle = (_availableVideos.firstWhere(
+              (v) => v['videoId'] == _selectedVideoToPlaceAdOnId,
+              orElse: () => {'title': ''})['title'] as String?) ??
+          '';
 
-      videoUrl = _videoAdUrl!;
-
-      // Ensure _selectedVideoToPlaceAdOnId is not null
-      if (_selectedVideoToPlaceAdOnId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Please select a video to place the ad on.')),
-        );
-        return;
-      }
-
-      final videoAdData = {
-        'videoUrl': videoUrl,
-        'placement': _videoAdPlacement,
-        'description': _adDescription, // add Ad description
-        'startTimestamp': _videoAdStartTimestamp, //Store as double
-        'endTimestamp': _videoAdEndTimestamp, //Store as double
-        'uploadTimestamp': FieldValue.serverTimestamp(),
-      };
-
-      // Add the ad data to a subcollection within the selected video document
       await FirebaseFirestore.instance
           .collection(videosCollection)
           .doc(_selectedVideoToPlaceAdOnId)
           .collection(videoAdsCollection)
-          .add(videoAdData);
+          .add({
+        'videoUrl': _videoAdUrl!,
+        'placement': _videoAdPlacementType,
+        'description': _adDescription,
+        'startTimestamp': start,
+        'endTimestamp': end,
+        'videoId': _selectedVideoToPlaceAdOnId,
+        'targetVideoTitle': targetTitle,
+        'uploadTimestamp': FieldValue.serverTimestamp(),
+      });
 
       setState(() {
         _videoAdUrl = null;
-        _videoAdPlacement = '';
+        _videoAdPlacementType = 'pre-roll';
+        _adDescription = '';
         _videoAdStartTimestamp = 0;
-        _videoAdEndTimestamp = 10;
+        _videoAdEndTimestamp = 30;
+        _selectedVideoToPlaceAdOnId = null;
+        _videoDuration = 3600;
         _videoPlayerController?.dispose();
         _videoPlayerController = null;
-        _selectedVideoToPlaceAdOnId = null;
-        _adDescription = ''; // clear description
       });
 
-      // Load Data After Upload
-      await VideoAdsTab.loadVideoAds(
-          setState,
-          context,
-          widget.onIsLoadingChanged,
-          widget.onVideoAdsChanged); // reload Video ADs from Firebase
+      await VideoAdsTab.loadVideoAds(setState, context,
+          widget.onIsLoadingChanged, widget.onVideoAdsChanged);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Video ad uploaded successfully!')),
-      );
+      _snack('Video ad uploaded successfully!', isError: false);
     } catch (e) {
-      print("Error uploading video ad: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to upload video ad: $e')),
-      );
+      _snack('Failed to upload ad: $e');
     }
   }
 
-  // Function to check if an ad overlaps with existing ads
-  Future<bool> _checkIfAdOverlaps(
-      String videoId, double startTimestamp, double endTimestamp) async {
-    final QuerySnapshot<Map<String, dynamic>> querySnapshot =
-        await FirebaseFirestore.instance
-            .collection(videosCollection)
-            .doc(videoId)
-            .collection(videoAdsCollection)
-            .where('endTimestamp', isGreaterThan: startTimestamp)
-            .where('startTimestamp', isLessThan: endTimestamp)
-            .get();
+  // ── Delete ad ─────────────────────────────────────────────────────────────
+  Future<void> _deleteVideoAd(String videoId, String adId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF292929),
+        title: const Text('Delete Ad', style: TextStyle(color: Colors.white)),
+        content: const Text('Are you sure you want to delete this ad?',
+            style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child:
+                  const Text('Delete', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
 
-    return querySnapshot.docs.isNotEmpty;
+    try {
+      await FirebaseFirestore.instance
+          .collection(videosCollection)
+          .doc(videoId)
+          .collection(videoAdsCollection)
+          .doc(adId)
+          .delete();
+
+      await VideoAdsTab.loadVideoAds(setState, context,
+          widget.onIsLoadingChanged, widget.onVideoAdsChanged);
+
+      _snack('Ad deleted.', isError: false);
+    } catch (e) {
+      _snack('Delete failed: $e');
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  Future<bool> _checkIfAdOverlaps(String videoId, String placementType) async {
+    final snap = await FirebaseFirestore.instance
+        .collection(videosCollection)
+        .doc(videoId)
+        .collection(videoAdsCollection)
+        .where('placement', isEqualTo: placementType)
+        .get();
+    return snap.docs.isNotEmpty;
   }
 
   Future<void> _loadAvailableVideos() async {
-    setState(() {
-      _isLoadingAvailableVideos = true;
-    });
-
+    setState(() => _isLoadingAvailableVideos = true);
     try {
-      FirebaseFirestore firestore = FirebaseFirestore.instance;
-      QuerySnapshot querySnapshot =
-          await firestore.collection(videosCollection).get();
+      final snap = await FirebaseFirestore.instance
+          .collection(videosCollection)
+          .get();
 
-      List<Map<String, dynamic>> videos = [];
+      final videos = <Map<String, dynamic>>[];
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final rawTitle = data['title'];
+        final titleText = rawTitle is Map
+            ? (rawTitle['en'] ?? rawTitle.values.first ?? 'Untitled').toString()
+            : (rawTitle ?? 'Untitled').toString();
 
-      for (QueryDocumentSnapshot doc in querySnapshot.docs) {
-        // Change to QueryDocumentSnapshot
-        var data = doc.data() as Map<String, dynamic>;
-        String videoId = doc.id;
-        String videoUrl = data['videoUrl'];
-        double duration = 10; // Default value
-
-        // Fetch video duration using _getVideoDuration
-        try {
-          duration = await _getVideoDuration(videoUrl);
-        } catch (e) {
-          print("Error fetching video duration: $e");
-        }
+        final videoUrl = (data['videoUrl2'] as String? ?? '').isNotEmpty
+            ? data['videoUrl2'] as String
+            : (data['videoUrl'] as String? ?? '');
 
         videos.add({
-          'videoId': videoId,
-          'title': data['title'],
-          'description': data['description'],
+          'videoId': doc.id,
+          'title': titleText,
           'videoUrl': videoUrl,
-          'thumbnailUrl': data['thumbnailUrl'],
-          'duration': duration, // Store the duration
+          'thumbnailUrl': data['thumbnailUrl'] as String? ?? '',
         });
       }
-
       setState(() {
         _availableVideos = videos;
         _isLoadingAvailableVideos = false;
       });
     } catch (e) {
       print("Error fetching available videos: $e");
-      setState(() {
-        _isLoadingAvailableVideos = false;
-      });
+      setState(() => _isLoadingAvailableVideos = false);
     }
   }
 
   Future<double> _getVideoDuration(String videoUrl) async {
     try {
-      VideoPlayerController tempController =
-          VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-      await tempController.initialize();
-      double duration = tempController.value.duration.inSeconds.toDouble();
-      await tempController.dispose(); // Dispose of the controller after use
-      return duration;
+      final c = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      await c.initialize();
+      final dur = c.value.duration.inSeconds.toDouble();
+      await c.dispose();
+      return dur;
     } catch (e) {
       print("Error getting video duration: $e");
-      return 10; // Default value in case of error
+      return 0;
     }
   }
 
+  void _snack(String msg, {bool isError = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: isError ? Colors.red[800] : Colors.green[700],
+    ));
+  }
+
+  String _formatTimestamp(double ts) {
+    final total = ts.round();
+    final h = total ~/ 3600;
+    final m = (total % 3600) ~/ 60;
+    final s = total % 60;
+    if (h > 0) {
+      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -278,55 +347,46 @@ class _VideoAdsTabState extends State<VideoAdsTab> {
           ),
           const SizedBox(height: 24),
 
-          // Video URL Input
-
+          // Row 1: Ad URL + Target Video
           Row(
             children: [
               Expanded(
                 child: TextField(
                   decoration: InputDecoration(
-                    labelText: 'Video Ad URL',
+                    labelText: 'Ad Video URL',
                     labelStyle: const TextStyle(color: Colors.white70),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8)),
                     filled: true,
                     fillColor: const Color(0xFF292929),
-                    prefixIcon: const Icon(Icons.link, color: Colors.white70),
+                    prefixIcon:
+                        const Icon(Icons.link, color: Colors.white70),
                   ),
                   style: const TextStyle(color: Colors.white),
                   onChanged: (value) {
                     setState(() {
                       _videoAdUrl = value;
                       _videoPlayerController?.dispose();
-                      if (Uri.tryParse(value)?.hasAbsolutePath == true) {
+                      _videoPlayerController = null;
+                      if (Uri.tryParse(value)?.hasAbsolutePath == true &&
+                          value.isNotEmpty) {
                         _videoPlayerController =
                             VideoPlayerController.networkUrl(Uri.parse(value))
                               ..initialize().then((_) {
-                                setState(() {
-                                  _videoDuration = _videoPlayerController
-                                          ?.value.duration.inSeconds
-                                          .toDouble() ??
-                                      10; // Get actual duration
-                                  _videoAdEndTimestamp = _videoDuration;
-                                });
+                                if (mounted) setState(() {});
                               });
-                      } else {
-                        _videoPlayerController = null;
-                        _videoDuration = 10;
-                        _videoAdEndTimestamp = _videoDuration;
                       }
                     });
                   },
                 ),
               ),
               const SizedBox(width: 16),
-
-              // Available Videos Dropdown
-              Expanded(child: _buildAvailableVideosDropdown()),
+              Expanded(child: _buildTargetVideoDropdown()),
             ],
           ),
           const SizedBox(height: 16),
 
+          // Row 2: Description + Placement type
           Row(
             children: [
               Expanded(
@@ -338,103 +398,115 @@ class _VideoAdsTabState extends State<VideoAdsTab> {
                         borderRadius: BorderRadius.circular(8)),
                     filled: true,
                     fillColor: const Color(0xFF292929),
-                    prefixIcon:
-                        const Icon(Icons.description, color: Colors.white70),
+                    prefixIcon: const Icon(Icons.description,
+                        color: Colors.white70),
                   ),
                   style: const TextStyle(color: Colors.white),
-                  onChanged: (value) => setState(() {
-                    _adDescription = value;
-                  }),
+                  onChanged: (v) => setState(() => _adDescription = v),
                 ),
               ),
               const SizedBox(width: 16),
+              Expanded(child: _buildPlacementDropdown()),
+            ],
+          ),
+          const SizedBox(height: 16),
 
-              // Placement Details
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Ad Placement Description',
-                    labelStyle: const TextStyle(color: Colors.white70),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    filled: true,
-                    fillColor: const Color(0xFF292929),
-                    prefixIcon: const Icon(Icons.location_on,
-                        color: Colors.white70), // Changed icon
-                  ),
-                  style: const TextStyle(color: Colors.white),
-                  onChanged: (value) => setState(() {
-                    _videoAdPlacement = value;
-                  }),
+          // Mid-roll timestamp slider
+          if (_videoAdPlacementType == 'mid-roll') ...[
+            if (_isLoadingTargetDuration)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.blueAccent)),
+                    SizedBox(width: 10),
+                    Text('Loading video duration...',
+                        style: TextStyle(color: Colors.white54)),
+                  ],
+                ),
+              )
+            else ...[
+              Text(
+                'Ad trigger position in video  (video length: ${_formatTimestamp(_videoDuration)})',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 6),
+              _buildTimestampRangeSlider(),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                        'Start: ${_formatTimestamp(_videoAdStartTimestamp)}',
+                        style: const TextStyle(color: Colors.white70)),
+                    Text('End: ${_formatTimestamp(_videoAdEndTimestamp)}',
+                        style: const TextStyle(color: Colors.white70)),
+                  ],
                 ),
               ),
             ],
-          ),
-
-          // Ad Description
-          const SizedBox(height: 16),
-
-          // Timestamp Input - Using RangeSlider
-          _buildTimestampRangeSlider(),
-
-          const SizedBox(height: 24),
-
-          // Display Start and End Times
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Start Time: ${_formatTimestamp(_videoAdStartTimestamp)}',
-                    style: const TextStyle(color: Colors.white70)),
-                Text('End Time: ${_formatTimestamp(_videoAdEndTimestamp)}',
-                    style: const TextStyle(color: Colors.white70)),
-              ],
+          ] else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                _videoAdPlacementType == 'pre-roll'
+                    ? 'Ad will play at the very start of the selected video (0s–30s).'
+                    : 'Ad will play at the very end of the selected video.',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
             ),
-          ),
 
-          // Upload Button
-          ElevatedButton(
+          const SizedBox(height: 8),
+
+          // Upload button
+          ElevatedButton.icon(
             onPressed: _uploadVideoAd,
+            icon: const Icon(Icons.cloud_upload_rounded),
+            label: const Text('Upload Video Ad'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              textStyle: const TextStyle(fontSize: 16),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              textStyle: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.bold),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+                  borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text("Upload Video Ad"),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
-          // Video Preview
+          // Ad video preview
           if (_videoPlayerController != null &&
               _videoPlayerController!.value.isInitialized)
             Column(
               children: [
-                AspectRatio(
-                  aspectRatio: _videoPlayerController!.value.aspectRatio,
-                  child: VideoPlayer(_videoPlayerController!),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: AspectRatio(
+                    aspectRatio: _videoPlayerController!.value.aspectRatio,
+                    child: VideoPlayer(_videoPlayerController!),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      if (_videoPlayerController!.value.isPlaying) {
-                        _videoPlayerController!.pause();
-                      } else {
-                        _videoPlayerController!.play();
-                      }
-                    });
-                  },
+                  onPressed: () => setState(() {
+                    if (_videoPlayerController!.value.isPlaying) {
+                      _videoPlayerController!.pause();
+                    } else {
+                      _videoPlayerController!.play();
+                    }
+                  }),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.grey[800],
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                   child: Icon(
                     _videoPlayerController!.value.isPlaying
@@ -442,11 +514,13 @@ class _VideoAdsTabState extends State<VideoAdsTab> {
                         : Icons.play_arrow,
                   ),
                 ),
+                const SizedBox(height: 16),
               ],
             ),
-          const SizedBox(height: 24),
 
-          // Existing Video Ads List
+          // Existing ads list
+          const Divider(color: Colors.white24),
+          const SizedBox(height: 8),
           Text(
             'Existing Video Ads',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -456,58 +530,185 @@ class _VideoAdsTabState extends State<VideoAdsTab> {
                     fontWeight: FontWeight.bold,
                     color: Colors.white),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Expanded(
             child: widget.isLoadingVideoAds
                 ? const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  )
-                : ListView.separated(
-                    itemCount: widget.existingVideoAds.length,
-                    separatorBuilder: (context, index) => const Divider(
-                      color: Colors.white30,
-                    ),
-                    itemBuilder: (context, index) {
-                      final videoAd = widget.existingVideoAds[index];
-                      return Card(
-                        color: cardBackgroundColor,
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: ListTile(
-                            textColor: Colors.white,
-                            title: Text(videoAd['placement'] ?? 'No Placement'),
-                            subtitle: Text(
-                                'Start: ${_formatTimestamp(videoAd['startTimestamp'])}, End: ${_formatTimestamp(videoAd['endTimestamp'])}'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit,
-                                      color: Colors.white70),
-                                  onPressed: () {
-                                    // Implement edit logic
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete,
-                                      color: Colors.white70),
-                                  onPressed: () {
-                                    // Implement delete logic
-                                  },
-                                ),
-                              ],
+                    child: CircularProgressIndicator(color: Colors.white))
+                : widget.existingVideoAds.isEmpty
+                    ? const Center(
+                        child: Text('No video ads yet.',
+                            style: TextStyle(color: Colors.white54)))
+                    : ListView.separated(
+                        itemCount: widget.existingVideoAds.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(color: Colors.white12),
+                        itemBuilder: (context, index) {
+                          final ad = widget.existingVideoAds[index];
+                          final adId = ad['id'] as String? ?? '';
+                          final videoId = ad['videoId'] as String? ?? '';
+                          final placement =
+                              ad['placement'] as String? ?? 'unknown';
+                          final targetTitle =
+                              ad['targetVideoTitle'] as String? ?? videoId;
+                          final startTs = (ad['startTimestamp'] as num?)
+                                  ?.toDouble() ??
+                              0.0;
+                          final endTs =
+                              (ad['endTimestamp'] as num?)?.toDouble() ??
+                                  0.0;
+                          final desc =
+                              ad['description'] as String? ?? '';
+
+                          return Card(
+                            color: cardBackgroundColor,
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  // Placement chip
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: _placementColor(placement)
+                                          .withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                          color: _placementColor(placement),
+                                          width: 1),
+                                    ),
+                                    child: Text(
+                                      placement.toUpperCase(),
+                                      style: TextStyle(
+                                          color: _placementColor(placement),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          targetTitle.isNotEmpty
+                                              ? targetTitle
+                                              : 'Video: $videoId',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        if (desc.isNotEmpty)
+                                          Text(desc,
+                                              style: const TextStyle(
+                                                  color: Colors.white54,
+                                                  fontSize: 12),
+                                              overflow:
+                                                  TextOverflow.ellipsis),
+                                        Text(
+                                          placement == 'pre-roll'
+                                              ? 'Plays at video start'
+                                              : placement == 'post-roll'
+                                                  ? 'Plays at video end'
+                                                  : '${_formatTimestamp(startTs)} → ${_formatTimestamp(endTs)}',
+                                          style: const TextStyle(
+                                              color: Colors.white38,
+                                              fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Delete
+                                  if (adId.isNotEmpty && videoId.isNotEmpty)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline,
+                                          color: Colors.red),
+                                      tooltip: 'Delete ad',
+                                      onPressed: () =>
+                                          _deleteVideoAd(videoId, adId),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      ),
           ),
         ],
       ),
+    );
+  }
+
+  // ── Widgets ───────────────────────────────────────────────────────────────
+  Widget _buildPlacementDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _videoAdPlacementType,
+      decoration: InputDecoration(
+        labelText: 'Ad Placement Type',
+        labelStyle: const TextStyle(color: Colors.white70),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        filled: true,
+        fillColor: const Color(0xFF292929),
+        prefixIcon:
+            const Icon(Icons.timer_outlined, color: Colors.white70),
+      ),
+      dropdownColor: const Color(0xFF292929),
+      style: const TextStyle(color: Colors.white),
+      items: _placementLabels.entries
+          .map((e) => DropdownMenuItem(
+                value: e.key,
+                child: Text(e.value,
+                    style: const TextStyle(fontSize: 13)),
+              ))
+          .toList(),
+      onChanged: (val) {
+        if (val == null) return;
+        setState(() {
+          _videoAdPlacementType = val;
+          _videoAdStartTimestamp = 0;
+          _videoAdEndTimestamp = 30;
+        });
+      },
+    );
+  }
+
+  Widget _buildTargetVideoDropdown() {
+    if (_isLoadingAvailableVideos) {
+      return const Center(
+          child: CircularProgressIndicator(color: Colors.white));
+    }
+    return DropdownButtonFormField<String>(
+      value: _selectedVideoToPlaceAdOnId,
+      decoration: InputDecoration(
+        labelText: 'Target Video',
+        labelStyle: const TextStyle(color: Colors.white70),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        filled: true,
+        fillColor: const Color(0xFF292929),
+        prefixIcon:
+            const Icon(Icons.video_library, color: Colors.white70),
+      ),
+      dropdownColor: const Color(0xFF292929),
+      style: const TextStyle(color: Colors.white),
+      hint: const Text('Select a Video',
+          style: TextStyle(color: Colors.white70)),
+      items: _availableVideos
+          .map((v) => DropdownMenuItem<String>(
+                value: v['videoId'] as String,
+                child: Text(v['title'] as String? ?? 'Unknown',
+                    overflow: TextOverflow.ellipsis),
+              ))
+          .toList(),
+      onChanged: (val) {
+        if (val != null) _onTargetVideoSelected(val);
+      },
     );
   }
 
@@ -518,79 +719,39 @@ class _VideoAdsTabState extends State<VideoAdsTab> {
         inactiveTrackColor: Colors.grey[600],
         thumbColor: Colors.blueAccent,
         valueIndicatorColor: Colors.blueAccent,
-        activeTickMarkColor: Colors.blue[700],
-        inactiveTickMarkColor: Colors.grey[600],
         overlayColor: Colors.blue.withAlpha(32),
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10.0),
-        overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
         valueIndicatorShape: const PaddleSliderValueIndicatorShape(),
-        valueIndicatorTextStyle: const TextStyle(
-          color: Colors.white,
-        ),
+        valueIndicatorTextStyle: const TextStyle(color: Colors.white),
       ),
       child: RangeSlider(
         min: 0.0,
         max: _videoDuration,
-        values: RangeValues(_videoAdStartTimestamp, _videoAdEndTimestamp),
-        divisions: 100, // Refine the increments
+        values: RangeValues(
+          _videoAdStartTimestamp.clamp(0, _videoDuration),
+          _videoAdEndTimestamp.clamp(0, _videoDuration),
+        ),
+        divisions: (_videoDuration / 10).round().clamp(10, 720),
         labels: RangeLabels(
           _formatTimestamp(_videoAdStartTimestamp),
           _formatTimestamp(_videoAdEndTimestamp),
         ),
-        onChanged: (RangeValues values) {
-          setState(() {
-            _videoAdStartTimestamp = values.start;
-            _videoAdEndTimestamp = values.end;
-          });
-        },
+        onChanged: (vals) => setState(() {
+          _videoAdStartTimestamp = vals.start;
+          _videoAdEndTimestamp = vals.end;
+        }),
       ),
     );
   }
 
-  Widget _buildAvailableVideosDropdown() {
-    return _isLoadingAvailableVideos
-        ? const Center(child: CircularProgressIndicator(color: Colors.white))
-        : DropdownButtonFormField<String>(
-            value: _selectedVideoToPlaceAdOnId,
-            decoration: InputDecoration(
-              labelText: 'Video to Place Ad On',
-              labelStyle: const TextStyle(color: Colors.white70),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              filled: true,
-              fillColor: const Color(0xFF292929),
-              prefixIcon:
-                  const Icon(Icons.video_library, color: Colors.white70),
-            ),
-            dropdownColor: const Color(0xFF292929),
-            style: const TextStyle(color: Colors.white),
-            hint: const Text('Select a Video',
-                style: TextStyle(color: Colors.white70)),
-            items: _availableVideos.map((video) {
-              return DropdownMenuItem<String>(
-                value: video['videoId'],
-                child: Text(video['title'] ?? 'Unknown Video'),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedVideoToPlaceAdOnId = value;
-                // Update video duration based on the selected video
-                final selectedVideo = _availableVideos
-                    .firstWhere((video) => video['videoId'] == value);
-                _videoDuration = selectedVideo['duration'];
-                _videoAdEndTimestamp =
-                    _videoDuration; // Set default end time to video duration
-                _videoAdStartTimestamp = 0; //Reset start time
-
-                // _loadVideoAds(); // Load Video Ads From The Collection - TO BE MOVED IN advertisement_page
-              });
-            },
-          );
-  }
-
-  String _formatTimestamp(double timestamp) {
-    Duration duration = Duration(microseconds: (timestamp * 1000000).round());
-    return "${duration.inMinutes.remainder(60).toString().padLeft(2, '0')}:${duration.inSeconds.remainder(60).toString().padLeft(2, '0')}.${duration.inMilliseconds.remainder(1000).toString().padRight(3, '0')}";
+  Color _placementColor(String placement) {
+    switch (placement) {
+      case 'pre-roll':
+        return Colors.greenAccent;
+      case 'post-roll':
+        return Colors.orangeAccent;
+      default:
+        return Colors.blueAccent;
+    }
   }
 }

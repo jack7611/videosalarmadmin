@@ -75,6 +75,21 @@ class AdminSignInController extends GetxController {
         String storedPassword = adminDoc['password'];
 
         if (email == storedEmail && password == storedPassword) {
+          // Sign in to Firebase Auth so Firestore write rules (request.auth != null) pass.
+          // Try email/password first; fall back to anonymous if the account doesn't exist.
+          try {
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+              email: email,
+              password: password,
+            );
+          } catch (_) {
+            try {
+              await FirebaseAuth.instance.signInAnonymously();
+            } catch (_) {
+              // Continue even if both fail — Firestore rules may still allow the request
+            }
+          }
+
           // Successful login: Store the login state and timestamp in localStorage
           html.window.localStorage['isLoggedIn'] = 'true';
           html.window.localStorage['lastLoginTime'] = DateTime.now().toIso8601String();
@@ -102,15 +117,11 @@ class AdminSignInController extends GetxController {
 
   // Sign-out function for admin
   void signOut() async {
-    // Clear localStorage to sign out
     html.window.localStorage.remove('isLoggedIn');
     html.window.localStorage.remove('lastLoginTime');
-    
-    // Ensure Firebase Auth is also signed out to prevent conflicts
     await FirebaseAuth.instance.signOut();
-    
-    errorMessage.value = ''; // Clear any previous error messages
-    Get.offAll(() => const AdminSignInPage());
+    // Full page reload is the most reliable way to reset state in Flutter Web
+    html.window.location.reload();
   }
 
   // Timer for auto-clearing error

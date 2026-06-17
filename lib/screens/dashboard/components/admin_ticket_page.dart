@@ -18,6 +18,42 @@ class _AdminTicketPageState extends State<AdminTicketPage> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    // Mark all unread tickets as read when admin opens this page
+    _markAllTicketsRead();
+  }
+
+  Future<void> _markAllTicketsRead() async {
+    try {
+      // Get ALL tickets — Firestore isNotEqualTo skips docs where the field
+      // is absent (new tickets from user app), so filter in Dart instead.
+      final snapshot = await FirebaseFirestore.instance
+          .collection('tickets')
+          .get();
+      final unread = snapshot.docs.where((doc) {
+        final d = doc.data() as Map<String, dynamic>;
+        return d['isRead'] != true;
+      }).toList();
+      if (unread.isEmpty) return;
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in unread) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
+    } catch (_) {}
+  }
+
+  Future<void> _markTicketRead(String ticketId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('tickets')
+          .doc(ticketId)
+          .update({'isRead': true});
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -56,6 +92,7 @@ class _AdminTicketPageState extends State<AdminTicketPage> {
   }
 
   void _showChatWindow(BuildContext context, String ticketId, String subject) {
+    _markTicketRead(ticketId);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -342,19 +379,51 @@ class _AdminTicketPageState extends State<AdminTicketPage> {
                                       final userId = data['userId'] as String?;
                                       final category =
                                           data['category'] ?? 'N/A';
+                                      final isUnread = data['isRead'] != true;
 
                                       return DataRow(
+                                        color: MaterialStateProperty.all(
+                                          isUnread
+                                              ? Colors.red.withOpacity(0.07)
+                                              : Colors.transparent,
+                                        ),
                                         cells: [
                                           DataCell(
                                             Container(
                                               constraints: const BoxConstraints(
                                                   maxWidth: 200),
-                                              child: Text(subject,
-                                                  style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w500),
-                                                  overflow:
-                                                      TextOverflow.ellipsis),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  if (isUnread) ...[
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(
+                                                          horizontal: 5, vertical: 2),
+                                                      margin: const EdgeInsets.only(right: 6),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.red,
+                                                        borderRadius:
+                                                            BorderRadius.circular(4),
+                                                      ),
+                                                      child: const Text('NEW',
+                                                          style: TextStyle(
+                                                              color: Colors.white,
+                                                              fontSize: 9,
+                                                              fontWeight:
+                                                                  FontWeight.bold)),
+                                                    ),
+                                                  ],
+                                                  Flexible(
+                                                    child: Text(subject,
+                                                        style: TextStyle(
+                                                            fontWeight: isUnread
+                                                                ? FontWeight.bold
+                                                                : FontWeight.w500),
+                                                        overflow:
+                                                            TextOverflow.ellipsis),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
                                           ),
                                           // --- THIS IS THE MODIFIED CELL ---

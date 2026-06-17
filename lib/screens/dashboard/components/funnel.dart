@@ -1,379 +1,294 @@
 import 'package:admin/controllers/User_controller.dart';
-import 'package:admin/responsive.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../constants.dart';
 
-class ConversionFunnelWidget extends StatelessWidget {
-  const ConversionFunnelWidget({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final userController = Get.find<UserController>();
-    
-    return Obx(() {
-      final funnelData = _calculateFunnelData(userController.users);
-      
-      return Container(
-        margin: EdgeInsets.all(defaultPadding),
-        padding: EdgeInsets.all(defaultPadding * 1.5),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.white,
-              Colors.grey.shade50,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: const BorderRadius.all(Radius.circular(16)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.blue.shade400, Colors.blue.shade600],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.chat_rounded,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Registration to Payment Conversion Funnel",
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade800,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        "Track user journey from registration to subscription",
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: defaultPadding * 1.5),
-            _buildFunnelSteps(context, funnelData),
-            SizedBox(height: defaultPadding * 1.5),
-            _buildConversionMetrics(context, funnelData),
-          ],
-        ),
-      );
-    });
-  }
-
-  FunnelData _calculateFunnelData(List users) {
-    final totalUsers = users.where((user) => !user.isDeleted).length;
-    final registeredUsers = users.where((user) => 
-      !user.isDeleted && user.registrationDate != null).length;
-    final subscribedUsers = users.where((user) => 
-      !user.isDeleted && 
-      user.active == true && 
-      user.subscriptionStartDate != null).length;
-    
-    return FunnelData(
-      totalUsers: totalUsers,
-      registeredUsers: registeredUsers,
-      subscribedUsers: subscribedUsers,
-    );
-  }
-
-  Widget _buildFunnelSteps(BuildContext context, FunnelData data) {
-    return Column(
-      children: [
-        _buildFunnelStep(
-          context,
-          "Total Users",
-          data.totalUsers,
-          data.totalUsers,
-          100.0,
-          Colors.blue.shade100,
-          Colors.blue.shade600,
-          true,
-        ),
-        _buildFunnelConnector(context),
-        _buildFunnelStep(
-          context,
-          "Registered Users",
-          data.registeredUsers,
-          data.totalUsers,
-          data.registrationConversionRate,
-          Colors.green.shade100,
-          Colors.green.shade600,
-          false,
-        ),
-        _buildFunnelConnector(context),
-        _buildFunnelStep(
-          context,
-          "Paid Subscribers",
-          data.subscribedUsers,
-          data.totalUsers,
-          data.subscriptionConversionRate,
-          Colors.purple.shade100,
-          Colors.purple.shade600,
-          false,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFunnelStep(
-    BuildContext context,
-    String title,
-    int count,
-    int totalCount,
-    double percentage,
-    Color backgroundColor,
-    Color borderColor,
-    bool isFirst,
-  ) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final maxWidth = screenWidth * 0.8;
-    final stepWidth = isFirst ? maxWidth : maxWidth * (percentage / 100);
-    
-    return Container(
-      width: stepWidth,
-      height: 80,
-      margin: EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border.all(color: borderColor, width: 2),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: borderColor,
-              ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              count.toString(),
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: borderColor,
-              ),
-            ),
-            Text(
-              "${percentage.toStringAsFixed(1)}%",
-              style: TextStyle(
-                fontSize: 12,
-                color: borderColor.withOpacity(0.8),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFunnelConnector(BuildContext context) {
-    return Container(
-      width: 2,
-      height: 20,
-      color: Colors.grey.shade400,
-      margin: EdgeInsets.symmetric(vertical: 4),
-    );
-  }
-
-  Widget _buildConversionMetrics(BuildContext context, FunnelData data) {
-    return Responsive(
-      mobile: Column(
-        children: [
-          _buildMetricCard(
-            context,
-            "Registration Rate",
-            "${data.registrationConversionRate.toStringAsFixed(1)}%",
-            "${data.registeredUsers} / ${data.totalUsers}",
-            Colors.green,
-          ),
-          SizedBox(height: defaultPadding),
-          _buildMetricCard(
-            context,
-            "Subscription Rate",
-            "${data.subscriptionConversionRate.toStringAsFixed(1)}%",
-            "${data.subscribedUsers} / ${data.totalUsers}",
-            Colors.purple,
-          ),
-          SizedBox(height: defaultPadding),
-          _buildMetricCard(
-            context,
-            "Reg to Sub Rate",
-            "${data.registrationToSubscriptionRate.toStringAsFixed(1)}%",
-            "${data.subscribedUsers} / ${data.registeredUsers}",
-            Colors.orange,
-          ),
-        ],
-      ),
-      tablet: Row(
-        children: [
-          Expanded(
-            child: _buildMetricCard(
-              context,
-              "Registration Rate",
-              "${data.registrationConversionRate.toStringAsFixed(1)}%",
-              "${data.registeredUsers} / ${data.totalUsers}",
-              Colors.green,
-            ),
-          ),
-          SizedBox(width: defaultPadding),
-          Expanded(
-            child: _buildMetricCard(
-              context,
-              "Subscription Rate",
-              "${data.subscriptionConversionRate.toStringAsFixed(1)}%",
-              "${data.subscribedUsers} / ${data.totalUsers}",
-              Colors.purple,
-            ),
-          ),
-          SizedBox(width: defaultPadding),
-          Expanded(
-            child: _buildMetricCard(
-              context,
-              "Reg to Sub Rate",
-              "${data.registrationToSubscriptionRate.toStringAsFixed(1)}%",
-              "${data.subscribedUsers} / ${data.registeredUsers}",
-              Colors.orange,
-            ),
-          ),
-        ],
-      ),
-      desktop: Row(
-        children: [
-          Expanded(
-            child: _buildMetricCard(
-              context,
-              "Registration Rate",
-              "${data.registrationConversionRate.toStringAsFixed(1)}%",
-              "${data.registeredUsers} / ${data.totalUsers}",
-              Colors.green,
-            ),
-          ),
-          SizedBox(width: defaultPadding),
-          Expanded(
-            child: _buildMetricCard(
-              context,
-              "Subscription Rate",
-              "${data.subscriptionConversionRate.toStringAsFixed(1)}%",
-              "${data.subscribedUsers} / ${data.totalUsers}",
-              Colors.purple,
-            ),
-          ),
-          SizedBox(width: defaultPadding),
-          Expanded(
-            child: _buildMetricCard(
-              context,
-              "Reg to Sub Rate",
-              "${data.registrationToSubscriptionRate.toStringAsFixed(1)}%",
-              "${data.subscribedUsers} / ${data.registeredUsers}",
-              Colors.orange,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricCard(
-    BuildContext context,
-    String title,
-    String percentage,
-    String ratio,
-    Color color,
-  ) {
-    return Container(
-      padding: EdgeInsets.all(defaultPadding),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        border: Border.all(color: color.withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            percentage,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            ratio,
-            style: TextStyle(
-              fontSize: 12,
-              color: color.withOpacity(0.7),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
+// ── Data model ────────────────────────────────────────────────────────────────
 class FunnelData {
   final int totalUsers;
   final int registeredUsers;
   final int subscribedUsers;
 
-  FunnelData({
+  const FunnelData({
     required this.totalUsers,
     required this.registeredUsers,
     required this.subscribedUsers,
   });
 
-  double get registrationConversionRate => 
-    totalUsers > 0 ? (registeredUsers / totalUsers) * 100 : 0;
+  double get registrationConversionRate =>
+      totalUsers > 0 ? (registeredUsers / totalUsers) * 100 : 0;
 
-  double get subscriptionConversionRate => 
-    totalUsers > 0 ? (subscribedUsers / totalUsers) * 100 : 0;
+  double get subscriptionConversionRate =>
+      totalUsers > 0 ? (subscribedUsers / totalUsers) * 100 : 0;
 
-  double get registrationToSubscriptionRate => 
-    registeredUsers > 0 ? (subscribedUsers / registeredUsers) * 100 : 0;
+  double get registrationToSubscriptionRate =>
+      registeredUsers > 0 ? (subscribedUsers / registeredUsers) * 100 : 0;
+}
+
+// ── Widget ────────────────────────────────────────────────────────────────────
+class ConversionFunnelWidget extends StatelessWidget {
+  const ConversionFunnelWidget({Key? key}) : super(key: key);
+
+  static const _bg     = Color(0xFF1A1A35);
+  static const _border = Color(0xFF2D3748);
+  static const _cyan   = Color(0xFF00D4FF);
+  static const _green  = Color(0xFF00B894);
+  static const _purple = Color(0xFF6C5CE7);
+  static const _textPrimary   = Color(0xFFFFFFFF);
+  static const _textSecondary = Color(0xFFB2B7C1);
+  static const _textMuted     = Color(0xFF74788D);
+
+  FunnelData _calculate(List users) {
+    final total    = users.where((u) => !u.isDeleted).length;
+    final reg      = users.where((u) => !u.isDeleted && u.registrationDate != null).length;
+    final subbed   = users.where((u) =>
+        !u.isDeleted && u.active == true && u.subscriptionStartDate != null).length;
+    return FunnelData(totalUsers: total, registeredUsers: reg, subscribedUsers: subbed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final userCtrl = Get.find<UserController>();
+
+    return Obx(() {
+      final data = _calculate(userCtrl.users);
+
+      return Container(
+        padding: const EdgeInsets.all(defaultPadding * 1.5),
+        decoration: BoxDecoration(
+          color: _bg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _border.withOpacity(0.4)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.35),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [_purple, _cyan]),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _purple.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.analytics_rounded,
+                    color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+                  Text('Conversion Funnel',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _textPrimary)),
+                  SizedBox(height: 2),
+                  Text('Registration → subscription journey',
+                      style: TextStyle(fontSize: 12, color: _textSecondary)),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: defaultPadding * 1.5),
+
+            // Funnel steps
+            _FunnelStep(
+              label: 'Total Users',
+              count: data.totalUsers,
+              percentage: 100,
+              color: _cyan,
+              icon: Icons.people_rounded,
+              widthFraction: 1.0,
+            ),
+            _FunnelArrow(),
+            _FunnelStep(
+              label: 'Registered',
+              count: data.registeredUsers,
+              percentage: data.registrationConversionRate,
+              color: _green,
+              icon: Icons.person_add_rounded,
+              widthFraction: 0.85,
+            ),
+            _FunnelArrow(),
+            _FunnelStep(
+              label: 'Paid Subscribers',
+              count: data.subscribedUsers,
+              percentage: data.subscriptionConversionRate,
+              color: _purple,
+              icon: Icons.star_rounded,
+              widthFraction: 0.60,
+            ),
+
+            const SizedBox(height: defaultPadding * 1.5),
+
+            // Metrics row
+            Row(children: [
+              Expanded(child: _MetricCard(
+                title: 'Registration Rate',
+                value: '${data.registrationConversionRate.toStringAsFixed(1)}%',
+                sub: '${data.registeredUsers} / ${data.totalUsers}',
+                color: _green,
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _MetricCard(
+                title: 'Subscription Rate',
+                value: '${data.subscriptionConversionRate.toStringAsFixed(1)}%',
+                sub: '${data.subscribedUsers} / ${data.totalUsers}',
+                color: _purple,
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _MetricCard(
+                title: 'Reg → Sub Rate',
+                value: '${data.registrationToSubscriptionRate.toStringAsFixed(1)}%',
+                sub: '${data.subscribedUsers} / ${data.registeredUsers}',
+                color: const Color(0xFFFFD93D),
+              )),
+            ]),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+// ── Funnel step ───────────────────────────────────────────────────────────────
+class _FunnelStep extends StatelessWidget {
+  final String label;
+  final int count;
+  final double percentage;
+  final Color color;
+  final IconData icon;
+  final double widthFraction;
+
+  const _FunnelStep({
+    required this.label,
+    required this.count,
+    required this.percentage,
+    required this.color,
+    required this.icon,
+    required this.widthFraction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: widthFraction,
+        child: Container(
+          height: 72,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [color.withOpacity(0.22), color.withOpacity(0.08)],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(label,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFE8E8E8))),
+                  Text('${percentage.toStringAsFixed(1)}% of total',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF74788D))),
+                ],
+              ),
+            ),
+            Text(
+              count.toString(),
+              style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: color),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _FunnelArrow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(children: [
+        Container(width: 2, height: 20, color: const Color(0xFF2D3748)),
+      ]),
+    );
+  }
+}
+
+// ── Metric card ───────────────────────────────────────────────────────────────
+class _MetricCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String sub;
+  final Color color;
+
+  const _MetricCard({
+    required this.title,
+    required this.value,
+    required this.sub,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title,
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color)),
+        const SizedBox(height: 6),
+        Text(value,
+            style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color)),
+        const SizedBox(height: 2),
+        Text(sub,
+            style: const TextStyle(fontSize: 10, color: Color(0xFF74788D))),
+      ]),
+    );
+  }
 }

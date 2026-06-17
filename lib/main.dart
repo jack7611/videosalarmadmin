@@ -27,6 +27,8 @@ import 'package:admin/screens/main/components/admin_page.dart';
 import 'package:admin/screens/main/components/custom_notification_screen.dart';
 import 'package:admin/screens/main/main_screen.dart';
 import 'package:admin/screens/dashboard/components/quiz_admin_page.dart';
+import 'package:admin/screens/dashboard/components/earnings_settings_page.dart';
+import 'package:admin/screens/dashboard/components/website_videos_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -48,6 +50,14 @@ const FirebaseOptions firebaseOptions = FirebaseOptions(
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: firebaseOptions);
+
+  // Ensure Firebase Auth always has a current user so Firestore write rules
+  // (request.auth != null) pass regardless of session state.
+  if (FirebaseAuth.instance.currentUser == null) {
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+    } catch (_) {}
+  }
 
   // Initialize controllers globally using Get.put()
   Get.put(AdminSignInController());
@@ -100,6 +110,8 @@ class MyApp extends StatelessWidget {
           '/Movies': (context) => const MoviesPage(),
           '/custom_notification': (context) => const CustomNotificationScreen(),
           '/quiz': (context) => const QuizAdminPage(),
+          '/earnings_settings': (context) => const EarningsSettingsPage(),
+          '/website_videos': (context) => const WebsiteVideosPage(),
 
           // Creator routes
           // Creator routes

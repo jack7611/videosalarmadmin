@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -84,8 +86,7 @@ class _AdminChatWindowState extends State<AdminChatWindow> {
       Map<String, dynamic> messageData = {
         'timestamp': FieldValue.serverTimestamp(),
         'senderRole': 'admin',
-        'senderId':
-            'admin_user_id', // Replace with actual admin ID if available
+        'senderId': 'admin_user_id',
       };
 
       if (text != null && text.isNotEmpty) {
@@ -111,6 +112,12 @@ class _AdminChatWindowState extends State<AdminChatWindow> {
       });
 
       _messageController.clear();
+
+      // Send push notification to the user
+      _sendPushNotificationToUser(
+        title: 'Support Reply: ${widget.ticketSubject}',
+        body: text ?? 'Admin sent you an image.',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -120,6 +127,47 @@ class _AdminChatWindowState extends State<AdminChatWindow> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _sendPushNotificationToUser({
+    required String title,
+    required String body,
+  }) async {
+    try {
+      if (_ticketData == null) return;
+      final String? userId = _ticketData!['userId'] as String?;
+      if (userId == null || userId.isEmpty) return;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      if (!userDoc.exists) return;
+
+      final userData = userDoc.data() as Map<String, dynamic>;
+      final fcmTokens =
+          (userData['fcmTokens'] as List?)?.cast<String>() ?? [];
+      if (fcmTokens.isEmpty) return;
+
+      const apiUrl = 'https://videosalarm.com/api/sendNotification';
+      final headers = {'Content-Type': 'application/json'};
+
+      for (final token in fcmTokens) {
+        try {
+          await http.post(
+            Uri.parse(apiUrl),
+            headers: headers,
+            body: json.encode({
+              'token': token,
+              'title': title,
+              'body': body,
+            }),
+          );
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Push notification error: $e');
     }
   }
 

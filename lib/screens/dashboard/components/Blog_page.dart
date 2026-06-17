@@ -7,97 +7,193 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'dart:html' as html;
 
+const Color _bg = Color(0xFF1A202C);
+const Color _card = Color(0xFF2D3748);
+const Color _primary = Color(0xFFF7FAFC);
+const Color _secondary = Color(0xFFA0AEC0);
+const Color _subtle = Color(0xFF718096);
+const Color _accent = Color(0xFF6366F1);
+
 class BlogPage extends StatelessWidget {
   const BlogPage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    // Initialize controllers
     final BlogController blogController = Get.put(BlogController());
     final FirebaseUploader uploader = FirebaseUploader();
 
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        title: const Text(
+          'Content Management',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 24, color: Colors.white),
+        ),
+        backgroundColor: _bg,
+        elevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              onPressed: () => _showUploadMediaDialog(context, uploader),
+              icon: const Icon(Icons.movie_creation_outlined, size: 18, color: Colors.white),
+              label: const Text('Upload Media', style: TextStyle(color: Colors.white)),
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFF805AD5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              onPressed: () => _showUploadDialog(context, uploader),
+              icon: const Icon(Icons.upload, size: 18, color: Colors.white),
+              label: const Text('Upload Blogs', style: TextStyle(color: Colors.white)),
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFF38A169),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: TextButton.icon(
+              onPressed: () => Get.toNamed('/Addblog'),
+              icon: const Icon(Icons.add, size: 18, color: Colors.white),
+              label: const Text('Add New Blog', style: TextStyle(color: Colors.white)),
+              style: TextButton.styleFrom(
+                backgroundColor: _accent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Obx(() {
+          if (blogController.isLoading.value) {
+            return const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4299E1)),
+              ),
+            );
+          }
+          if (blogController.error.isNotEmpty) {
+            return Center(
+              child: Text(blogController.error.value,
+                  style: const TextStyle(color: Colors.red, fontSize: 16)),
+            );
+          }
+
+          final blogs = blogController.blogData;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Row with Title and Buttons
+              // Summary cards
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Content Management',
-                      style:
-                          TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      // Upload Initial Media Button
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.movie_creation_outlined, color: Colors.white),
-                        label: const Text("Upload Initial Media",
-                            style: TextStyle(color: Colors.white)),
-                        onPressed: () => _showUploadMediaDialog(context, uploader),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.purple,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 15),
-                      // Upload Initial Data Button
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.upload, color: Colors.white),
-                        label: const Text("Upload Initial Blogs",
-                            style: TextStyle(color: Colors.white)),
-                        onPressed: () => _showUploadDialog(context, uploader),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 15),
-                      // Add New Blog Button
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.add, color: Colors.white),
-                        label: const Text("Add New Blog",
-                            style: TextStyle(color: Colors.white)),
-                        onPressed: () => Get.toNamed('/Addblog'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ],
+                  _summaryCard(
+                    icon: Icons.article_rounded,
+                    title: 'Total Blogs',
+                    value: blogs.length.toString(),
+                    color: const Color(0xFF4299E1),
+                  ),
+                  const SizedBox(width: 16),
+                  _summaryCard(
+                    icon: Icons.people_alt_rounded,
+                    title: 'Authors',
+                    value: blogs.map((b) => b['author']).toSet().length.toString(),
+                    color: const Color(0xFF48BB78),
+                  ),
+                  const SizedBox(width: 16),
+                  _summaryCard(
+                    icon: Icons.schedule_rounded,
+                    title: 'Latest Blog',
+                    value: blogs.isNotEmpty && blogs.first['publishedAt'] != null
+                        ? DateFormat('d MMM yyyy')
+                            .format(DateTime.parse(blogs.first['publishedAt']))
+                        : '—',
+                    color: const Color(0xFFED8936),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              // Blog Table
-              Obx(() {
-                if (blogController.isLoading.value) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (blogController.error.isNotEmpty) {
-                  return Center(child: Text(blogController.error.value, style: const TextStyle(color: Colors.red)));
-                } else if (blogController.blogData.isEmpty){
-                   return const Center(child: Text("No blogs found. Add a new one or upload initial data.", style: TextStyle(fontSize: 18)));
-                }
-                else {
-                  return BlogTable(blogData: blogController.blogData);
-                }
-              }),
+              const SizedBox(height: 24),
+
+              // Table
+              Expanded(
+                child: blogs.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.article_outlined, size: 64, color: Colors.white24),
+                            const SizedBox(height: 16),
+                            const Text('No blogs found.',
+                                style: TextStyle(fontSize: 18, color: _secondary)),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: () => Get.toNamed('/Addblog'),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Add New Blog'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _accent,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _BlogTable(blogData: blogs),
+              ),
             ],
-          ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _summaryCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 13, color: _secondary)),
+                const SizedBox(height: 4),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.bold, color: _primary)),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -106,185 +202,278 @@ class BlogPage extends StatelessWidget {
   void _showUploadDialog(BuildContext context, FirebaseUploader uploader) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Confirm Upload"),
-          content: const Text(
-              "Are you sure you want to upload the initial 3 blog posts to Firebase? This may create duplicates if they already exist."),
-          actions: [
-            TextButton(
-              child: const Text("Cancel"),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            TextButton(
-              child: const Text("Upload"),
-              onPressed: () {
-                Navigator.of(context).pop();
-                uploader.storeBlogsInFirebase(context);
-              },
-            ),
-          ],
-        );
-      },
+      builder: (context) => _ConfirmDialog(
+        title: 'Upload Initial Blogs',
+        message: 'Are you sure you want to upload the initial 3 blog posts to Firebase? This may create duplicates if they already exist.',
+        onConfirm: () => uploader.storeBlogsInFirebase(context),
+      ),
     );
   }
 
   void _showUploadMediaDialog(BuildContext context, FirebaseUploader uploader) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Confirm Media Upload"),
-          content: const Text(
-              "Are you sure you want to upload the initial media content (movies and songs) to Firebase? This will store them in the 'videos' collection."),
-          actions: [
-            TextButton(
-              child: const Text("Cancel"),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            TextButton(
-              child: const Text("Upload"),
-              onPressed: () {
-                Navigator.of(context).pop();
-                uploader.storeMediaInFirebase(context);
-              },
-            ),
-          ],
-        );
-      },
+      builder: (context) => _ConfirmDialog(
+        title: 'Upload Initial Media',
+        message: 'Are you sure you want to upload the initial media content (movies and songs) to Firebase? This will store them in the \'videos\' collection.',
+        onConfirm: () => uploader.storeMediaInFirebase(context),
+      ),
     );
   }
 }
 
-class BlogTable extends StatelessWidget {
-  final List<Map<String, dynamic>> blogData;
-
-  const BlogTable({Key? key, required this.blogData}) : super(key: key);
+class _ConfirmDialog extends StatelessWidget {
+  final String title;
+  final String message;
+  final VoidCallback onConfirm;
+  const _ConfirmDialog({required this.title, required this.message, required this.onConfirm});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 5,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      clipBehavior: Clip.antiAlias,
-      child: DataTable(
-        dataRowMaxHeight: 80,
-        headingRowColor: MaterialStateProperty.resolveWith(
-            (states) => const Color.fromARGB(255, 14, 18, 21)),
-        headingTextStyle:
-            const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        columns: const [
-          DataColumn(label: Text("Author")),
-          DataColumn(label: Text("Title (English)")),
-          DataColumn(label: Text("Date")),
-          DataColumn(label: Text("Description (English)")),
-          DataColumn(label: Text("Image")),
-          DataColumn(label: Text("Actions")),
-        ],
-        rows: blogData.map((blog) {
-          return DataRow(
-            cells: [
-              DataCell(Text(blog['author'] ?? 'N/A')),
-              DataCell(
-                SizedBox(
-                  width: 200,
-                  child: Text(
-                    blog['title_en'] ?? 'No Title',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-              DataCell(
-                Text(
-                  blog['publishedAt'] != null
-                      ? DateFormat('d-MMM-yy').format(DateTime.parse(blog['publishedAt']))
-                      : 'N/A',
-                ),
-              ),
-              DataCell(
-                SizedBox(
-                  width: 300,
-                  child: Text(
-                    blog['description_en'] ?? 'No Description',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-              DataCell(
-                GestureDetector(
-                  onTap: () => _launchImageURL(blog['urlToImage']),
-                  child: const Text("View Image",
-                      style: TextStyle(
-                          color: Colors.blue,
-                          decoration: TextDecoration.underline)),
-                ),
-              ),
-              DataCell(
-                Row(
-                  children: [
-                    IconButton(
-                      tooltip: "View Details",
-                      icon: const Icon(Icons.visibility, color: Colors.blue),
-                      onPressed: () => Get.to(() => BlogDetailPage(blogId: blog['id'])),
-                    ),
-                    IconButton(
-                      tooltip: "Edit Blog",
-                      icon: const Icon(Icons.edit, color: Colors.orange),
-                      onPressed: () => Get.to(() => EditBlogPage(blogId: blog['id'])),
-                    ),
-                    IconButton(
-                      tooltip: "Delete Blog",
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _showDeleteDialog(context, blog),
-                    ),
+    return AlertDialog(
+      backgroundColor: _card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(title, style: const TextStyle(color: _primary, fontWeight: FontWeight.w700)),
+      content: Text(message, style: const TextStyle(color: _secondary, fontSize: 14)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel', style: TextStyle(color: _secondary)),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            onConfirm();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accent,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: const Text('Confirm'),
+        ),
+      ],
+    );
+  }
+}
+
+class _BlogTable extends StatelessWidget {
+  final List<Map<String, dynamic>> blogData;
+  const _BlogTable({required this.blogData});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            child: Row(
+              children: [
+                const Icon(Icons.article_rounded, color: _secondary, size: 20),
+                const SizedBox(width: 8),
+                const Text('Blog Posts',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _primary)),
+                const Spacer(),
+                Text('${blogData.length} total',
+                    style: const TextStyle(color: _subtle, fontSize: 13)),
+              ],
+            ),
+          ),
+          const Divider(color: Colors.white10, height: 1),
+          Expanded(
+            child: SingleChildScrollView(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  dataRowMaxHeight: 80,
+                  columnSpacing: 24,
+                  headingRowColor: MaterialStateProperty.resolveWith((_) => const Color(0xFF1A202C)),
+                  headingRowHeight: 52,
+                  columns: const [
+                    DataColumn(label: Text('Author', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+                    DataColumn(label: Text('Title', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+                    DataColumn(label: Text('Date', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+                    DataColumn(label: Text('Description', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+                    DataColumn(label: Text('Image', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+                    DataColumn(label: Text('Actions', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
                   ],
+                  rows: blogData.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final blog = entry.value;
+                    return DataRow(
+                      color: MaterialStateProperty.resolveWith((_) =>
+                          index.isEven ? _card : const Color(0xFF252D3D)),
+                      cells: [
+                        DataCell(
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _accent.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              blog['author'] ?? 'N/A',
+                              style: const TextStyle(color: _accent, fontWeight: FontWeight.w500, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 220,
+                            child: Text(
+                              blog['title_en'] ?? blog['title'] ?? 'No Title',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: _primary, fontWeight: FontWeight.w500, fontSize: 14),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Row(
+                            children: [
+                              const Icon(Icons.calendar_today, size: 13, color: _subtle),
+                              const SizedBox(width: 6),
+                              Text(
+                                blog['publishedAt'] != null
+                                    ? DateFormat('d MMM yy').format(DateTime.parse(blog['publishedAt']))
+                                    : 'N/A',
+                                style: const TextStyle(color: _secondary, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 280,
+                            child: Text(
+                              blog['description_en'] ?? blog['description'] ?? 'No Description',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: _secondary, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          TextButton.icon(
+                            onPressed: () {
+                              final url = blog['urlToImage'];
+                              if (url != null && url.isNotEmpty) {
+                                html.window.open(url, '_blank');
+                              }
+                            },
+                            icon: const Icon(Icons.image_outlined, size: 15),
+                            label: const Text('View'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF4299E1),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _actionBtn(
+                                icon: Icons.visibility_outlined,
+                                color: const Color(0xFF4299E1),
+                                tooltip: 'View Details',
+                                onTap: () => Get.to(() => BlogDetailPage(blogId: blog['id'])),
+                              ),
+                              const SizedBox(width: 4),
+                              _actionBtn(
+                                icon: Icons.edit_outlined,
+                                color: const Color(0xFFED8936),
+                                tooltip: 'Edit Blog',
+                                onTap: () => Get.to(() => EditBlogPage(blogId: blog['id'])),
+                              ),
+                              const SizedBox(width: 4),
+                              _actionBtn(
+                                icon: Icons.delete_outline,
+                                color: const Color(0xFFE53E3E),
+                                tooltip: 'Delete Blog',
+                                onTap: () => _showDeleteDialog(context, blog),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
               ),
-            ],
-          );
-        }).toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  void _launchImageURL(String? url) {
-    if (url != null && url.isNotEmpty) {
-      html.window.open(url, '_blank');
-    }
+  Widget _actionBtn({required IconData icon, required Color color, required String tooltip, required VoidCallback onTap}) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, color: color, size: 17),
+        ),
+      ),
+    );
   }
 
   void _showDeleteDialog(BuildContext context, Map<String, dynamic> blog) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Delete Blog"),
-          content: Text("Are you sure you want to delete '${blog['title_en']}'?"),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text("Cancel"),
-            ),
-            TextButton(
-              onPressed: () {
-                final BlogController blogController = Get.find();
-                blogController.deleteBlog(blog['id']);
-                Navigator.of(context).pop();
-              },
-              child: const Text("Delete", style: TextStyle(color: Colors.red)),
-            ),
+      builder: (context) => AlertDialog(
+        backgroundColor: _card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange[400]),
+            const SizedBox(width: 8),
+            const Text('Delete Blog', style: TextStyle(color: _primary, fontWeight: FontWeight.w700)),
           ],
-        );
-      },
+        ),
+        content: Text(
+          "Are you sure you want to delete '${blog['title_en'] ?? blog['title']}'? This action cannot be undone.",
+          style: const TextStyle(color: _secondary, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel', style: TextStyle(color: _secondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final BlogController blogController = Get.find();
+              blogController.deleteBlog(blog['id']);
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE53E3E),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class FirebaseUploader {
-  
-  // New list containing the movie and song data
   final List<Map<String, dynamic>> initialMediaContent = [
 {
   "category": {
@@ -297,8 +486,8 @@ class FirebaseUploader {
   },
   "createdAt": "2025-08-15T00:00:00+05:30",
   "description": {
-    "en": "Shedding light on Uttarakhand’s lesser-known culinary paradise, Meethi Maa Ku Aashriwad celebrates the state’s rich food heritage, weaving its diverse and nutrient-rich traditions into a narrative for national and international recognition.",
-    "hi": "उत्तराखंड के कम ज्ञात पाक स्वर्ग पर प्रकाश डालते हुए, ‘मीठी मां कू आशीर्वाद’ राज्य की समृद्ध खाद्य धरोहर का उत्सव मनाती है, इसकी विविध और पोषक परंपराओं को राष्ट्रीय और अंतरराष्ट्रीय पहचान के लिए एक कथा में पिरोती है।"
+    "en": "Shedding light on Uttarakhand's lesser-known culinary paradise, Meethi Maa Ku Aashriwad celebrates the state's rich food heritage, weaving its diverse and nutrient-rich traditions into a narrative for national and international recognition.",
+    "hi": "उत्तराखंड के कम ज्ञात पाक स्वर्ग पर प्रकाश डालते हुए, 'मीठी मां कू आशीर्वाद' राज्य की समृद्ध खाद्य धरोहर का उत्सव मनाती है, इसकी विविध और पोषक परंपराओं को राष्ट्रीय और अंतरराष्ट्रीय पहचान के लिए एक कथा में पिरोती है।"
   },
   "director": {
     "en": "Kanta Prasad",
@@ -405,8 +594,7 @@ class FirebaseUploader {
   },
   "videoUrl": "https://iframe.mediadelivery.net/play/460348/5cb3e86e-9f44-4de9-b9c2-f9b1a4476ad1",
   "views": 879
-}
-,
+},
    {
   "category": {
     "en": "Songs",
@@ -439,7 +627,6 @@ class FirebaseUploader {
   "videoUrl": "https://iframe.mediadelivery.net/play/460348/0cf841f6-248a-4ff9-af80-fbc63b367cb3",
   "views": 1388
 },
-
 {
   "category": {
     "en": "Movie",
@@ -479,8 +666,7 @@ class FirebaseUploader {
   },
   "videoUrl": "https://iframe.mediadelivery.net/play/460348/39546063-dbe7-456a-b005-614799a809e3",
   "views": 3147
-}
-,
+},
    {
   "category": {
     "en": "Songs",
@@ -520,8 +706,7 @@ class FirebaseUploader {
   },
   "videoUrl": "https://iframe.mediadelivery.net/play/460348/1ad511bc-712d-4eac-84c8-2d88f43344ff",
   "views": 1376
-}
-,
+},
    {
   "category": {
     "en": "Songs",
@@ -562,87 +747,60 @@ class FirebaseUploader {
   "videoUrl": "https://iframe.mediadelivery.net/play/460348/8d2f5087-a2ea-4fdc-bea4-7b145a8119c1",
   "views": 1353
 }
-
   ];
 
-  // List of initial blog posts
   final List<Map<String, dynamic>> blogs = [
     {
       "author": "Rahul",
       "title_en": "Why VideosAlarm is the App Every Uttarakhandi Needs",
       "title_hi": "वीडियोअलार्म: हर उत्तराखंडी के लिए जरूरी ऐप",
-      "description_en":
-          "VideosAlarm is more than an app; it’s a celebration of Uttarakhand’s culture through music and soon-to-be-launched video content.",
-      "description_hi":
-          "वीडियोअलार्म सिर्फ एक ऐप नहीं है; यह उत्तराखंड की संस्कृति का संगीत और जल्द लॉन्च होने वाले वीडियो कंटेंट के माध्यम से उत्सव है।",
-      "content_en":
-          "In today’s fast-paced world, staying connected to your roots can be challenging. That’s where VideosAlarm comes in – an app crafted to keep you close to the heart of Uttarakhand through its music and entertainment. Why choose VideosAlarm? Connect to Culture: Immerse yourself in songs that reflect the traditions of Uttarakhand. Support Local Talent: By streaming music on VideosAlarm, you’re promoting regional artists and creators. Future-Ready: VideosAlarm is evolving to include web series, short films, and documentaries rooted in Uttarakhand’s essence. Whether you’re from the state or someone fascinated by its beauty and culture, VideosAlarm is your companion to experience it all. Download the app today and join the growing community that celebrates Uttarakhand’s vibrant spirit.",
-      "content_hi":
-          "आज की तेज़-तर्रार दुनिया में अपनी जड़ों से जुड़े रहना चुनौतीपूर्ण हो सकता है। यहीं पर वीडियोअलार्म आता है – एक ऐसा ऐप जिसे उत्तराखंड के दिल से जुड़े रहने के लिए संगीत और मनोरंजन के माध्यम से डिज़ाइन किया गया है। वीडियोअलार्म क्यों चुनें? संस्कृति से जुड़ें: उन गीतों में डूबें जो उत्तराखंड की परंपराओं को दर्शाते हैं। स्थानीय प्रतिभा का समर्थन करें: वीडियोअलार्म पर संगीत स्ट्रीम करके आप क्षेत्रीय कलाकारों और क्रिएटर्स को बढ़ावा दे रहे हैं। भविष्य के लिए तैयार: वीडियोअलार्म वेब सीरीज़, लघु फिल्में और डॉक्यूमेंट्रीज़ शामिल करने के लिए विकसित हो रहा है जो उत्तराखंड की आत्मा पर आधारित हैं। चाहे आप राज्य के हों या उसकी सुंदरता और संस्कृति से मोहित कोई व्यक्ति, वीडियोअलार्म आपके लिए इसे अनुभव करने का साथी है। आज ही ऐप डाउनलोड करें और उस बढ़ती हुई समुदाय में शामिल हों जो उत्तराखंड की जीवंत संस्कृति का जश्न मनाती है।",
+      "description_en": "VideosAlarm is more than an app; it's a celebration of Uttarakhand's culture through music and soon-to-be-launched video content.",
+      "description_hi": "वीडियोअलार्म सिर्फ एक ऐप नहीं है; यह उत्तराखंड की संस्कृति का संगीत और जल्द लॉन्च होने वाले वीडियो कंटेंट के माध्यम से उत्सव है।",
+      "content_en": "In today's fast-paced world, staying connected to your roots can be challenging. That's where VideosAlarm comes in – an app crafted to keep you close to the heart of Uttarakhand through its music and entertainment.",
+      "content_hi": "आज की तेज़-तर्रार दुनिया में अपनी जड़ों से जुड़े रहना चुनौतीपूर्ण हो सकता है। यहीं पर वीडियोअलार्म आता है।",
       "publishedAt": "2024-10-25T13:38:07.479Z",
-      "url":
-          "https://en.wikipedia.org/wiki/Blog#:~:text=A%20blog%20(a%20truncation%20of,top%20of%20the%20web%20page.",
-      "urlToImage":
-          "https://firebasestorage.googleapis.com/v0/b/videoalarm-a0b26.appspot.com/o/blog%20images%2Fvideoalarm_logo.jpg?alt=media&token=10b68586-2ed1-4f98-8c43-6a95ce37a998",
+      "url": "https://en.wikipedia.org/wiki/Blog",
+      "urlToImage": "https://firebasestorage.googleapis.com/v0/b/videoalarm-a0b26.appspot.com/o/blog%20images%2Fvideoalarm_logo.jpg?alt=media&token=10b68586-2ed1-4f98-8c43-6a95ce37a998",
       "source": {"id": "1", "name": "New Source"}
     },
-    // ... other blogs
   ];
 
-  /// NEW FUNCTION: Stores the initial movie and song data in Firestore.
   Future<void> storeMediaInFirebase(BuildContext context) async {
     final CollectionReference videoCollection =
         FirebaseFirestore.instance.collection('newvideos');
-
     WriteBatch batch = FirebaseFirestore.instance.batch();
-
     for (var mediaData in initialMediaContent) {
-      // Use the 'id' field from the JSON as the document ID
       DocumentReference docRef = videoCollection.doc(mediaData['id']);
       batch.set(docRef, mediaData);
     }
-
     try {
       await batch.commit();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Successfully uploaded media content to Firebase!'),
-            backgroundColor: Colors.green),
+        const SnackBar(content: Text('Successfully uploaded media content!'), backgroundColor: Colors.green),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Error uploading media: $e'),
-            backgroundColor: Colors.red),
+        SnackBar(content: Text('Error uploading media: $e'), backgroundColor: Colors.red),
       );
     }
   }
 
-
-  /// Stores the initial blog data in Firestore.
   Future<void> storeBlogsInFirebase(BuildContext context) async {
     final CollectionReference blogCollection =
         FirebaseFirestore.instance.collection('blogsnew');
-
     WriteBatch batch = FirebaseFirestore.instance.batch();
-
     for (var blogData in blogs) {
       DocumentReference docRef = blogCollection.doc();
       batch.set(docRef, blogData);
     }
-
     try {
       await batch.commit();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Successfully uploaded blogs to Firebase!'),
-            backgroundColor: Colors.green),
+        const SnackBar(content: Text('Successfully uploaded blogs!'), backgroundColor: Colors.green),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Error uploading blogs: $e'),
-            backgroundColor: Colors.red),
+        SnackBar(content: Text('Error uploading blogs: $e'), backgroundColor: Colors.red),
       );
     }
   }
