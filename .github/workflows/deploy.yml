@@ -18,6 +18,8 @@ jobs:
         with:
           flutter-version: '3.38.5'
 
+      - name: Flutter Clean 
+        run:  flutter clean
       - name: Install Dependencies
         run: flutter pub get
 
