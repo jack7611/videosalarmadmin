@@ -216,54 +216,68 @@ class UserPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  'Last 24 Hours',
-                  userController.last24HoursUsersCount.value.toString(),
-                  Icons.hourglass_bottom_rounded,
-                  const Color(0xFFF59E0B),
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Expanded(
-              //   child: _buildStatCard(
-              //     'Yesterday',
-              //     userController.yesterdayUsersCount.value.toString(),
-              //     Icons.today_rounded,
-              //     const Color(0xFF10B981),
-              //   ),
-              // ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  'Last 7 Days',
-                  userController.last7DaysUsersCount.value.toString(),
-                  Icons.date_range_rounded,
-                  const Color(0xFF3B82F6),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  'Total Users',
-                  userController.users.length.toString(),
-                  Icons.people_rounded,
-                  const Color(0xFF8B5CF6),
-                ),
-              ),
-              // ADDED: TV Users Stat Card
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  'TV Users',
-                  userController.tvUserCount.value.toString(),
-                  Icons.tv_rounded,
-                  const Color(0xFFEC4899),
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              int crossAxisCount = constraints.maxWidth < 600
+                  ? 2
+                  : constraints.maxWidth < 1100
+                      ? 4
+                      : 7;
+              double itemWidth = (constraints.maxWidth - (crossAxisCount - 1) * 16) / crossAxisCount;
+              double childAspectRatio = itemWidth / 175;
+              return GridView.count(
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: childAspectRatio,
+                children: [
+                  _buildStatCard(
+                    'Total Users',
+                    userController.users.length.toString(),
+                    Icons.people_rounded,
+                    const Color(0xFF8B5CF6),
+                  ),
+                  _buildStatCard(
+                    'Active Subscriptions',
+                    userController.activeSubCount.value.toString(),
+                    Icons.check_circle_rounded,
+                    const Color(0xFF10B981),
+                  ),
+                  _buildStatCard(
+                    'Expired Subscriptions',
+                    userController.expiredSubCount.value.toString(),
+                    Icons.cancel_rounded,
+                    const Color(0xFFEF4444),
+                  ),
+                  _buildStatCard(
+                    'No Subscription',
+                    userController.noSubCount.value.toString(),
+                    Icons.no_accounts_rounded,
+                    const Color(0xFF6B7280),
+                  ),
+                  _buildStatCard(
+                    'TV Users',
+                    userController.tvUserCount.value.toString(),
+                    Icons.tv_rounded,
+                    const Color(0xFFEC4899),
+                  ),
+                  _buildStatCard(
+                    'Last 24 Hours',
+                    userController.last24HoursUsersCount.value.toString(),
+                    Icons.hourglass_bottom_rounded,
+                    const Color(0xFFF59E0B),
+                  ),
+                  _buildStatCard(
+                    'Last 7 Days',
+                    userController.last7DaysUsersCount.value.toString(),
+                    Icons.date_range_rounded,
+                    const Color(0xFF3B82F6),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -273,7 +287,7 @@ class UserPage extends StatelessWidget {
   Widget _buildStatCard(
       String title, String count, IconData icon, Color accentColor) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
         color: const Color(0xFF0F0F0F),
         borderRadius: BorderRadius.circular(16),
@@ -379,10 +393,12 @@ class UserPage extends StatelessWidget {
                         userController.clearFilter();
                       } else if (value == 'last24') {
                         userController.filterLast24Hours();
-                      } else if (value == 'active') {
-                        userController.filterActiveUsers();
-                      } else if (value == 'inactive') {
-                        userController.filterInactiveUsers();
+                      } else if (value == 'active_sub') {
+                        userController.filterActiveSubUsers();
+                      } else if (value == 'expired_sub') {
+                        userController.filterExpiredSubUsers();
+                      } else if (value == 'no_sub') {
+                        userController.filterNoSubUsers();
                       } else if (value == 'tv_users') {
                         userController.filterTvUsers();
                       }
@@ -401,18 +417,25 @@ class UserPage extends StatelessWidget {
                       ),
                       const PopupMenuDivider(height: 1),
                       _filterMenuItem(
-                        value: 'active',
-                        label: 'Active Users',
+                        value: 'active_sub',
+                        label: 'Active Subscriptions',
                         icon: Icons.check_circle_rounded,
                         color: const Color(0xFF10B981),
-                        active: label == 'Active',
+                        active: label == 'Active Subscriptions',
                       ),
                       _filterMenuItem(
-                        value: 'inactive',
-                        label: 'Inactive Users',
+                        value: 'expired_sub',
+                        label: 'Expired Subscriptions',
                         icon: Icons.cancel_rounded,
                         color: const Color(0xFFEF4444),
-                        active: label == 'Inactive',
+                        active: label == 'Expired Subscriptions',
+                      ),
+                      _filterMenuItem(
+                        value: 'no_sub',
+                        label: 'No Subscriptions',
+                        icon: Icons.no_accounts_rounded,
+                        color: const Color(0xFF6B7280),
+                        active: label == 'No Subscriptions',
                       ),
                       const PopupMenuDivider(height: 1),
                       _filterMenuItem(
@@ -769,7 +792,7 @@ class _UserDataSource extends DataTableSource {
                               : Colors.white38)),
               ],
             )
-          : const Text('N/A',
+          : const Text('No subscription',
               style: TextStyle(fontSize: 13, color: Colors.white38))),
 
       // ── Actions ──

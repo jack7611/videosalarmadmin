@@ -403,8 +403,8 @@ exports.notifyUserOnAdminReply = functions.firestore
         return null;
       }
 
-      const messageText = messageData.text || "An admin sent you an image.";
-      const subject = ticketData.category || "your ticket";
+      const messageText = messageData.text || "Our support team sent you an image.";
+      const subject = ticketData.subject || ticketData.category || "your ticket";
 
       console.log(
         `Preparing to send notifications to ${fcmTokens.length} tokens.`
@@ -413,8 +413,8 @@ exports.notifyUserOnAdminReply = functions.firestore
       const sendPromises = fcmTokens.map((token) => {
         const message = {
           notification: {
-            title: `New Reply on: "${subject}"`,
-            body: messageText,
+            title: `VideosAlarm Support Team`,
+            body: `Reply on your "${subject}" ticket: ${messageText}`,
           },
           data: {
             click_action: "FLUTTER_NOTIFICATION_CLICK",

@@ -21,6 +21,9 @@ class UserController extends GetxController {
   RxInt last24HoursUsersCount = 0.obs;
   RxInt yesterdayUsersCount = 0.obs;
   RxInt last7DaysUsersCount = 0.obs;
+  RxInt activeSubCount = 0.obs;
+  RxInt expiredSubCount = 0.obs;
+  RxInt noSubCount = 0.obs;
   RxString searchQuery = ''.obs;
   RxString activeFilterLabel = 'All Users'.obs;
   // base list for the current active filter (before search)
@@ -54,6 +57,17 @@ class UserController extends GetxController {
 
       // Exclude soft-deleted users from the active list
       users.value = fetchedUsers.where((u) => !u.isDeleted).toList();
+
+      // Sort users by registration date descending (latest first)
+      users.sort((a, b) {
+        final aDate = a.registrationDate;
+        final bDate = b.registrationDate;
+        if (aDate == null && bDate == null) return 0;
+        if (aDate == null) return 1;
+        if (bDate == null) return -1;
+        return bDate.compareTo(aDate);
+      });
+
       _activeFilterBase = List.from(users);
       _applySearch();
       calculateUserStats();
@@ -97,6 +111,62 @@ class UserController extends GetxController {
     tvUserCount.value = users.where((user) {
       return user.devices != null && user.devices!.containsKey('AndroidTV');
     }).length;
+
+    // Compute active, expired, and no-subscription counts
+    activeSubCount.value = users.where((user) {
+      final isActive = user.active == true;
+      final hasExpiry = user.subscriptionExpiryDate != null;
+      final isExpired = hasExpiry && user.subscriptionExpiryDate!.isBefore(now);
+      return isActive && !isExpired;
+    }).length;
+
+    expiredSubCount.value = users.where((user) {
+      final hasExpiry = user.subscriptionExpiryDate != null;
+      final isExpired = hasExpiry && user.subscriptionExpiryDate!.isBefore(now);
+      return isExpired;
+    }).length;
+
+    noSubCount.value = users.where((user) {
+      final isActive = user.active == true;
+      final hasExpiry = user.subscriptionExpiryDate != null;
+      final isExpired = hasExpiry && user.subscriptionExpiryDate!.isBefore(now);
+      return !isActive && !isExpired;
+    }).length;
+  }
+
+  void filterActiveSubUsers() {
+    final now = DateTime.now();
+    _activeFilterBase = users.where((u) {
+      final isActive = u.active == true;
+      final hasExpiry = u.subscriptionExpiryDate != null;
+      final isExpired = hasExpiry && u.subscriptionExpiryDate!.isBefore(now);
+      return isActive && !isExpired;
+    }).toList();
+    activeFilterLabel.value = 'Active Subscriptions';
+    _applySearch();
+  }
+
+  void filterExpiredSubUsers() {
+    final now = DateTime.now();
+    _activeFilterBase = users.where((u) {
+      final hasExpiry = u.subscriptionExpiryDate != null;
+      final isExpired = hasExpiry && u.subscriptionExpiryDate!.isBefore(now);
+      return isExpired;
+    }).toList();
+    activeFilterLabel.value = 'Expired Subscriptions';
+    _applySearch();
+  }
+
+  void filterNoSubUsers() {
+    final now = DateTime.now();
+    _activeFilterBase = users.where((u) {
+      final isActive = u.active == true;
+      final hasExpiry = u.subscriptionExpiryDate != null;
+      final isExpired = hasExpiry && u.subscriptionExpiryDate!.isBefore(now);
+      return !isActive && !isExpired;
+    }).toList();
+    activeFilterLabel.value = 'No Subscriptions';
+    _applySearch();
   }
 
   void _applySearch() {
